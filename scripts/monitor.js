@@ -57,8 +57,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 function matchesKeywords(title) {
     if (title.toLowerCase().includes('test_item')) return true; // Partner Verification Hook
     if (!config.EliteKeywords || config.EliteKeywords.length === 0) return false;
-    const lowerTitle = title.toLowerCase();
-    return config.EliteKeywords.some(keyword => lowerTitle.includes(keyword.toLowerCase()));
+    
+    return config.EliteKeywords.some(keyword => {
+        // Escape special regex characters in the keyword
+        const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Use word boundaries \b to ensure "Jordan 1" doesn't match "Jordan 13"
+        const regex = new RegExp(`\\b${escapedKeyword}\\b`, 'i');
+        return regex.test(title);
+    });
 }
 
 function isRestockWatchlisted(handle) {
@@ -298,10 +304,9 @@ async function checkShopifySite(target) {
                 continue; 
             }
 
-            // 2. Keyword Filter (Elite Target Only)
+            // 2. Keyword Filter (Elite Target Only) Strict Match
             const keywordMatch = matchesKeywords(title);
             const restockWatch = isRestockWatchlisted(handle);
-            const highHypeMatch = global.globalHypeScore > 80; // PARTNER OVERRIDE: Alert on insanity even if not a core keyword
 
             // 3. Status Change (Sold Out -> Available)
             const currentStatus = firstVariant.available ? 'Available' : 'Sold Out';
@@ -310,22 +315,21 @@ async function checkShopifySite(target) {
             let alertStatus = 'Available';
 
             if (lastStatus === 'Sold Out' && currentStatus === 'Available') {
-                if (keywordMatch || restockWatch || highHypeMatch) {
+                if (keywordMatch || restockWatch) {
                     triggerAlert = true;
                     if (restockWatch) alertStatus = '🚀 RESTOCK SNIPE';
-                    else if (highHypeMatch) alertStatus = '🔥 GLOBAL HYPE OVERRIDE';
                     else alertStatus = '✅ BACK IN STOCK';
                 }
             }
 
             // 4. New Product / Price Logic
-            if (keywordMatch || highHypeMatch) {
+            if (keywordMatch) {
                 // Big Price Drops for keywords only
                 if (lastPrice && price < lastPrice) {
                     const dropPercent = ((lastPrice - price) / lastPrice) * 100;
                     if (dropPercent >= 10) {
                         triggerAlert = true;
-                        alertStatus = highHypeMatch ? '📈 HYPE + PRICE DROP' : `💰 BIG PRICE DROP (${dropPercent.toFixed(0)}%)`;
+                        alertStatus = `💰 BIG PRICE DROP (${dropPercent.toFixed(0)}%)`;
                     }
                 }
                 
@@ -340,7 +344,7 @@ async function checkShopifySite(target) {
                 // Initial detection
                 if (!lastEntry && currentStatus === 'Available') {
                     triggerAlert = true;
-                    alertStatus = highHypeMatch ? '📈 HIGH-HYPE SCOUT' : '🔔 NEW HYPE DETECTED';
+                    alertStatus = '🔔 NEW HYPE DETECTED';
                 }
             }
 

@@ -3,3 +3,4 @@ node_modules
 monitor.log
 .DS_Store
 agent/rules/*.json
+node_modules

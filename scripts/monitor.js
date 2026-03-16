@@ -1,7 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 const fetch = require('node-fetch');
-require('dotenv').config();
+const dotenv = require('dotenv');
+const result = dotenv.config();
+if (result.error) {
+    console.warn("⚠️  Warning: No .env file found. Check your deployment setup.");
+} else {
+    const keysCount = Object.keys(result.parsed || {}).length;
+    console.log(`✅ Environment Loaded: ${keysCount} variables found.`);
+}
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const { google } = require('googleapis');
 const puppeteer = require('puppeteer-extra');
@@ -365,7 +372,8 @@ async function checkBrowserSite(target, browser) {
     console.log(`  └ Using Identity: ${ua.substring(0, 40)}...`);
     
     try {
-        await page.goto(target.url, { waitUntil: 'networkidle2', timeout: 60000 });
+        // Increased timeout for cloud environments (90s)
+        await page.goto(target.url, { waitUntil: 'networkidle2', timeout: 90000 });
         
         // Behavioral Stealth: Organic browsing before scan
         await simulateHumanBehavior(page);
@@ -513,6 +521,9 @@ async function run() {
         args: [
             '--no-sandbox', 
             '--disable-setuid-sandbox', 
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--disable-gpu',
             '--no-media-mode',
             '--disable-blink-features=AutomationControlled', // Bypass many bot detections
             '--window-size=1920,1080'

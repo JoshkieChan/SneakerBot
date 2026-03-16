@@ -36,7 +36,8 @@
     },
     {
       "site": "Supreme New Drops",
-      "url": "https://www.supremenewyork.com/shop/new"
+      "url": "https://us.supreme.com/collections/new",
+      "isBrowser": true
     },
     {
       "site": "Travis Scott Official",

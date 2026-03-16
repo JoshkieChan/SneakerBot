@@ -39,6 +39,8 @@
       "url": "https://us.supreme.com/collections/new",
       "isBrowser": true
     },
+    { "site": "GOAT Just Dropped", "url": "https://goat.com/collections/just-dropped", "isBrowser": true },
+    { "site": "StockX Most Active", "url": "https://stockx.com/search?sort=most-active", "isBrowser": true },
     {
       "site": "Travis Scott Official",
       "url": "https://shop.travisscott.com/"

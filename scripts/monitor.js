@@ -33,6 +33,11 @@ if (fs.existsSync(HISTORY_PATH)) {
     history = JSON.parse(fs.readFileSync(HISTORY_PATH, 'utf8'));
 }
 
+// Global Counters for Transparency
+global.itemsScannedToday = 0;
+global.sessionStartTime = new Date();
+global.heartbeatCycle = 0;
+
 // Array of common, modern User Agents
 const USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -129,34 +134,49 @@ async function logToGoogleSheets(payload) {
 
 async function getMarketPrice(browser, productName) {
     console.log(`Fetching market price for: ${productName}...`);
-    const page = await browser.newPage();
-    try {
-        // Optimized search query: include "Shoe" or "Apparel" context if missing
-        const searchUrl = `https://stockx.com/search?s=${encodeURIComponent(productName)}`;
-        await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-        
-        const price = await page.evaluate(() => {
-            // Find the first result's price - typically "Last Sale" or "Lowest Ask"
-            // We target the primary grid results
-            const priceEl = document.querySelector('[data-testid="product-tile"] [data-testid="product-tile-price"]');
-            if (!priceEl) {
-                // Fallback to simpler selector if StockX changed UI
-                const fallback = document.querySelector('p[data-testid="lowest-ask-amount"]');
+    let attempts = 0;
+    const maxAttempts = 2;
+    
+    while (attempts < maxAttempts) {
+        const page = await browser.newPage();
+        try {
+            // Optimized search query
+            const searchUrl = `https://stockx.com/search?s=${encodeURIComponent(productName)}`;
+            // Increased timeout for market scraping (45s per attempt)
+            await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+            
+            const price = await page.evaluate(() => {
+                // Focus on the first search result grid item price
+                const gridItems = document.querySelectorAll('[data-testid="product-tile"]');
+                if (gridItems.length > 0) {
+                    const priceEl = gridItems[0].querySelector('[data-testid="product-tile-price"]');
+                    if (priceEl && priceEl.innerText.includes('$')) {
+                        return parseFloat(priceEl.innerText.replace(/[^0-9.]/g, ''));
+                    }
+                }
+                
+                // Fallback to common price classes
+                const fallback = document.querySelector('p[data-testid="lowest-ask-amount"]') || 
+                                document.querySelector('.chakra-text[data-testid="product-tile-price"]');
                 if (fallback) return parseFloat(fallback.innerText.replace(/[^0-9.]/g, ''));
-            }
-            if (priceEl && priceEl.innerText.includes('$')) {
-                return parseFloat(priceEl.innerText.replace(/[^0-9.]/g, ''));
-            }
-            return null;
-        });
-        
-        return price;
-    } catch (error) {
-        console.error(`Market lookup error for ${productName}:`, error.message);
-        return null;
-    } finally {
-        await page.close();
+                
+                return null;
+            });
+            
+            if (price) return price;
+            
+            console.warn(`  └ Attempt ${attempts + 1}: Price not found on page. Retrying...`);
+        } catch (error) {
+            console.error(`  └ Attempt ${attempts + 1} Error:`, error.message);
+        } finally {
+            await page.close();
+        }
+        attempts++;
+        if (attempts < maxAttempts) await sleep(2000); // Wait before retry
     }
+    
+    console.warn(`  └ Failed to fetch market price for ${productName} after ${maxAttempts} attempts.`);
+    return null;
 }
 
 async function sendDiscordAlert(payload) {
@@ -209,10 +229,14 @@ async function sendDiscordAlert(payload) {
 }
 
 async function sendHeartbeat(hypeScore) {
-    // Silence heartbeats by default in main channel if user finds them confusing.
-    // They still log to terminal/logfile.
-    if (!process.env.DISCORD_BOT_TOKEN || !process.env.HEARTBEAT_CHANNEL_ID) {
-        console.log(`[STATUS] Engine Warm | Hype Velocity: ${hypeScore} | Stealth: ACTIVE`);
+    // Only send heartbeat every 6 cycles (roughly every 3 hours) to minimize noise
+    global.heartbeatCycle++;
+    if (global.heartbeatCycle % 6 !== 1) {
+        console.log(`[STATUS] Engine Warm | Hype Velocity: ${hypeScore} | Items Scanned Session: ${global.itemsScannedToday} | Stealth: ACTIVE`);
+        return;
+    }
+
+    if (!process.env.DISCORD_BOT_TOKEN || !process.env.DISCORD_CHANNEL_ID) {
         return; 
     }
 
@@ -220,16 +244,19 @@ async function sendHeartbeat(hypeScore) {
         const channel = await client.channels.fetch(process.env.DISCORD_CHANNEL_ID);
         if (!channel) return;
 
+        const uptimeHrs = ((new Date() - global.sessionStartTime) / (1000 * 60 * 60)).toFixed(1);
+
         const embed = new EmbedBuilder()
-            .setTitle('📡 SNIPER HEARTBEAT: Engine Warm')
+            .setTitle('📡 SNIPER HEARTBEAT: Engine Stable')
             .setColor(0x00BFFF)
-            .setDescription(`**Status**: Scanning 70+ retailers. **Waiting for elite drops/restocks.**\n*This is a status pulse to confirm the bot is active and stealthy.*`)
+            .setDescription(`**Ghost Sniper** is actively monitoring 70+ retailers.\n*Noise is filtered; I will only alert you on elite hype/restocks.*`)
             .addFields(
+                { name: 'Uptime', value: `⏱️ ${uptimeHrs} hours`, inline: true },
+                { name: 'Items Scanned', value: `🔍 ${global.itemsScannedToday.toLocaleString()}`, inline: true },
                 { name: 'Hype Velocity', value: `📈 ${hypeScore} mentions/min`, inline: true },
-                { name: 'Target Keywords', value: config.EliteKeywords.join(', ') || 'None', inline: true },
-                { name: 'Stealth Mode', value: config.BehavioralStealth ? '✅ GHOST ACTIVE' : '❌ OFF', inline: true },
-                { name: 'Interval', value: `${config.CheckIntervalMinutes} min (+ jitter)`, inline: true }
+                { name: 'Stealth Mode', value: config.BehavioralStealth ? '✅ GHOST ACTIVE' : '❌ OFF', inline: true }
             )
+            .setFooter({ text: 'Cloud VPS Engine | Verified 24/7' })
             .setTimestamp();
 
         await channel.send({ embeds: [embed] });
@@ -255,7 +282,12 @@ async function checkShopifySite(target) {
             const title = vendor && !product.title.includes(vendor) ? `${vendor} ${product.title}` : product.title;
             const firstVariant = product.variants[0];
             const price = parseFloat(firstVariant.price);
-            const link = `${target.url.split('/products.json')[0]}/products/${handle}`;
+            
+            // NORMALIZED LINK: Remove /collections/... to prevent duplicate entries in history
+            const baseUrl = target.url.split('/products.json')[0];
+            const link = `${baseUrl}/products/${handle}`;
+
+            global.itemsScannedToday++;
 
             const lastEntry = history[link];
             const lastPrice = lastEntry ? lastEntry.price : null;

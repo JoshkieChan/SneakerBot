@@ -1,0 +1,5 @@
+node_modules
+.env
+monitor.log
+.DS_Store
+agent/rules/*.json

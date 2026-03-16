@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ghost-sniper
+  labels:
+    app: ghost-sniper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ghost-sniper
+  template:
+    metadata:
+      labels:
+        app: ghost-sniper
+    spec:
+      containers:
+      - name: sniper
+        image: ghost-sniper:latest
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - secretRef:
+            name: sniper-env
+        volumeMounts:
+        - name: history-storage
+          mountPath: /app/agent/rules/history.json
+          subPath: history.json
+      volumes:
+      - name: history-storage
+        hostPath:
+          path: /Users/joshkie/.gemini/antigravity/playground/shining-filament/agent/rules/history.json
+          type: File
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sniper-env
+type: Opaque
+data:
+  # Base64 encoded environment variables would go here
+  # Example: DISCORD_BOT_TOKEN: <BASE64_TOKEN>

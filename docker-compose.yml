@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  ghost-sniper:
+    build: .
+    container_name: ghost-sniper
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./agent/rules/history.json:/app/agent/rules/history.json
+      - ./monitor.log:/app/monitor.log
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10mb"
+        max-file: "3"

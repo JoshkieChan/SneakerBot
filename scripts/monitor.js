@@ -1,13 +1,15 @@
 const fs = require('fs');
 const path = require('path');
 const fetch = require('node-fetch');
-const dotenv = require('dotenv');
-const result = dotenv.config();
-if (result.error) {
-    console.warn("⚠️  Warning: No .env file found. Check your deployment setup.");
+// Load environment variables
+dotenv.config();
+const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
+const DISCORD_CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
+
+if (!DISCORD_BOT_TOKEN || !DISCORD_CHANNEL_ID) {
+    console.warn("⚠️  Warning: Missing DISCORD_BOT_TOKEN or DISCORD_CHANNEL_ID in environment.");
 } else {
-    const keysCount = Object.keys(result.parsed || {}).length;
-    console.log(`✅ Environment Loaded: ${keysCount} variables found.`);
+    console.log("✅ Environment Verified: Critical keys are active.");
 }
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const { google } = require('googleapis');

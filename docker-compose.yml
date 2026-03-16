@@ -6,6 +6,7 @@ services:
     env_file:
       - .env
     volumes:
+      - ./.env:/app/.env
       - ./agent/rules/history.json:/app/agent/rules/history.json
       - ./monitor.log:/app/monitor.log
     logging:

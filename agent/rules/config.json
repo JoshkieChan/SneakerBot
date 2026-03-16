@@ -2,12 +2,12 @@
   "MinAlertPrice": 1.0,
   "CheckIntervalMinutes": 15,
   "EliteKeywords": [
-    "Travis Scott",
-    "Jordan 1",
-    "Labubu",
-    "Pokemon",
-    "Box Logo",
-    "Corteiz"
+    "Travis Scott", "Jordan 1", "Jordan 3", "Jordan 4", "Jordan 5", "Jordan 11",
+    "Labubu", "Pokemon", "Box Logo", "Corteiz", "Bape", "Supreme", "Dunk SB", 
+    "Kobe", "Rat", "Hellstar", "Denim Tears", "Fear of God", "Essentials",
+    "Stussy", "Kith", "Aime Leon Dore", "New Balance 990", "New Balance 2002R",
+    "Asics Gel-Kayano", "AE1", "AE2", "Mamba", "Protros", "Special Set", 
+    "Booster Box", "Be@rbrick", "Pop Mart", "Sonny Angel"
   ],
   "EarlyLinks": [],
   "RestockWatchlist": [],

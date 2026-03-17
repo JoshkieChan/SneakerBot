@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const fetch = require('node-fetch');
+const dotenv = require('dotenv');
+
 // Load environment variables
 dotenv.config();
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;

@@ -26,13 +26,34 @@ const SERVICE_ACCOUNT_FILE = fs.readdirSync(path.join(__dirname, '../agent/rules
     .find(f => f.endsWith('.json') && f.includes('acquired-voice'));
 const SERVICE_ACCOUNT_PATH = path.join(__dirname, '../agent/rules/', SERVICE_ACCOUNT_FILE || 'service-account.json');
 
-// Load config
-const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+// Process Safety: Catch unhandled crashes
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('⚠️ Unhandled Rejection:', reason);
+});
+process.on('uncaughtException', (error) => {
+    console.error('⚠️ Uncaught Exception:', error);
+});
+
+// Load config dynamically
+let config = {};
+function loadConfig() {
+    try {
+        config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    } catch (error) {
+        console.error('⚠️ Error reading config.json, using previous config state:', error.message);
+    }
+}
+loadConfig();
 
 // Load history or create if not exists
 let history = {};
 if (fs.existsSync(HISTORY_PATH)) {
-    history = JSON.parse(fs.readFileSync(HISTORY_PATH, 'utf8'));
+    try {
+        history = JSON.parse(fs.readFileSync(HISTORY_PATH, 'utf8'));
+    } catch (e) {
+        console.error("⚠️ Failed to parse history.json, resetting history.");
+        history = {};
+    }
 }
 
 // Global Counters for Transparency
@@ -118,20 +139,34 @@ async function simulateHumanBehavior(page) {
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-async function logToGoogleSheets(payload) {
-    if (!process.env.GOOGLE_SHEETS_ID || !fs.existsSync(SERVICE_ACCOUNT_PATH)) {
-        console.warn('Google Sheets integration skipped (missing ID or service-account.json)');
-        return;
-    }
+client.on('error', error => {
+    console.error('⚠️ Discord Client WebSocket Error:', error.message);
+});
 
+// Cache Google Sheets instance to prevent memory leak and API thrashing
+let sheetsInstance = null;
+async function getSheetsInstance() {
+    if (sheetsInstance) return sheetsInstance;
+    if (!process.env.GOOGLE_SHEETS_ID || !fs.existsSync(SERVICE_ACCOUNT_PATH)) return null;
+    
     try {
         const auth = new google.auth.GoogleAuth({
             keyFile: SERVICE_ACCOUNT_PATH,
             scopes: ['https://www.googleapis.com/auth/spreadsheets'],
         });
+        sheetsInstance = google.sheets({ version: 'v4', auth });
+        return sheetsInstance;
+    } catch (e) {
+        console.error("⚠️ Failed to init Google Sheets auth:", e.message);
+        return null;
+    }
+}
 
-        const sheets = google.sheets({ version: 'v4', auth });
-        
+async function logToGoogleSheets(payload) {
+    const sheets = await getSheetsInstance();
+    if (!sheets) return;
+
+    try {
         // Try to find the sheet named "Records" first, otherwise use the first sheet
         const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: process.env.GOOGLE_SHEETS_ID });
         const sheetName = spreadsheet.data.sheets.find(s => s.properties.title === 'Records') ? 'Records' : spreadsheet.data.sheets[0].properties.title;
@@ -312,8 +347,10 @@ async function checkShopifySite(target) {
         for (const product of data.products) {
             const handle = product.handle;
             const vendor = product.vendor || "";
-            // Combine Vendor + Title for 100% specificity (e.g. Nike Jordan 1 vs just Jordan 1)
-            const title = vendor && !product.title.includes(vendor) ? `${vendor} ${product.title}` : product.title;
+            // Combine Vendor + Title for 100% specificity. Use case-insensitive includes to check.
+            const title = vendor && !product.title.toLowerCase().includes(vendor.toLowerCase()) 
+                ? `${vendor} ${product.title}` 
+                : product.title;
             const firstVariant = product.variants[0];
             const price = parseFloat(firstVariant.price);
             
@@ -571,13 +608,19 @@ async function checkSocialSentiment(browser) {
 }
 
 async function run() {
-    console.log(`[${new Date().toISOString()}] Starting Deal Scout session...`);
+    console.log(`\n--- [${new Date().toISOString()}] Scanning Cycle Started ---`);
+    
+    // Dynamic Config Reload: Allows hot-swapping keywords without restarting the bot
+    loadConfig();
     
     try {
-        await client.login(process.env.DISCORD_BOT_TOKEN);
+        // Only login if not currently ready
+        if (!client.isReady()) {
+            await client.login(process.env.DISCORD_BOT_TOKEN);
+            console.log("✅ Discord Client Connected.");
+        }
     } catch (error) {
         console.error(`Failed to login to Discord: ${error.message}`);
-        // Do not return here, we still want to schedule the next run
         console.error('Will retry on the next scheduled interval.');
     }
 

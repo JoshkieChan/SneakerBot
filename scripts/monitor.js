@@ -100,6 +100,13 @@ function matchesKeywords(title) {
     if (title.toLowerCase().includes('test_item')) return true; // Partner Verification Hook
     if (!config.EliteKeywords || config.EliteKeywords.length === 0) return false;
     
+    // Phase 13: Negative Keyword Filter (Elite Noise Reduction)
+    const negativeMatch = config.EliteNegativeKeywords && config.EliteNegativeKeywords.some(neg => {
+        const regex = new RegExp(`\\b${neg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        return regex.test(title);
+    });
+    if (negativeMatch) return false;
+
     return config.EliteKeywords.some(keyword => {
         // Escape special regex characters in the keyword
         const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -624,6 +631,17 @@ async function run() {
         console.error('Will retry on the next scheduled interval.');
     }
 
+    // Global Browser Watchdog: ensure browser is healthy or restart
+    if (global.globalBrowser) {
+        try {
+            const pages = await global.globalBrowser.pages();
+            if (pages.length === 0) throw new Error("Browser lost communication.");
+            await global.globalBrowser.close(); 
+        } catch (e) {
+            console.warn("⚠️ Browser Watchdog: Cleaning up stale process...");
+        }
+    }
+
     const browser = await puppeteer.launch({ 
         headless: "new",
         args: [
@@ -637,7 +655,7 @@ async function run() {
             '--window-size=1920,1080'
         ] 
     });
-    global.globalBrowser = browser; // Make browser accessible to site checks
+    global.globalBrowser = browser; 
 
     // Phase 4: Social Sentiment Pulse
     global.globalHypeScore = await checkSocialSentiment(browser);

@@ -54,6 +54,25 @@ function getRandomUserAgent() {
 // Sleep helper for mimicking human delays
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Phase 11: Autonomous Profit Intelligence Engine
+function calculateTrueProfit(retailPrice, marketPrice) {
+    if (!marketPrice || !retailPrice) return null;
+    const shipping = config.EstimatedShipping || 10;
+    const feePercent = (config.PlatformFeePercent || 12) / 100;
+    const totalCost = retailPrice + shipping;
+    const payout = marketPrice * (1 - feePercent);
+    const trueProfit = payout - totalCost;
+    return { trueProfit: Math.round(trueProfit * 100) / 100, totalCost, payout: Math.round(payout * 100) / 100 };
+}
+
+function getProfitVerdict(profitData) {
+    if (!profitData) return { verdict: '⚠️ VERIFY MANUALLY', color: 0xFFD700, emoji: '⚠️' };
+    const p = profitData.trueProfit;
+    if (p >= 30) return { verdict: `✅ SNIPE (+$${p.toFixed(2)})`, color: 0x00FF00, emoji: '✅' };
+    if (p >= 1)  return { verdict: `⚠️ LOW MARGIN (+$${p.toFixed(2)})`, color: 0xFFD700, emoji: '⚠️' };
+    return { verdict: `❌ BRICK (-$${Math.abs(p).toFixed(2)})`, color: 0xFF0000, emoji: '❌' };
+}
+
 function matchesKeywords(title) {
     if (title.toLowerCase().includes('test_item')) return true; // Partner Verification Hook
     if (!config.EliteKeywords || config.EliteKeywords.length === 0) return false;
@@ -195,40 +214,47 @@ async function sendDiscordAlert(payload) {
         const channel = await client.channels.fetch(process.env.DISCORD_CHANNEL_ID);
         if (!channel) throw new Error('Channel not found');
 
+        // Phase 11: Profit Verdict System
+        const profitData = payload.profitData;
+        const verdict = getProfitVerdict(profitData);
+
         const isRealDrop = payload.status.toLowerCase().includes('new') || payload.status.toLowerCase().includes('hype');
         const isRestock = payload.status.toLowerCase().includes('restock') || payload.status.toLowerCase().includes('stock');
         
-        let embedColor = 0xFFD700; // Standard Orange
         let headline = 'PRICE DROP';
-        
-        if (isRealDrop) {
-            embedColor = 0x00FF00; // Elite Green
-            headline = 'NEW HYPE DROP';
-        } else if (isRestock) {
-            embedColor = 0x00BFFF; // Sky Blue
-            headline = 'RESTOCK DETECTED';
-        }
+        if (isRealDrop) headline = 'NEW HYPE DROP';
+        else if (isRestock) headline = 'RESTOCK DETECTED';
+
+        // Color priority: Profit verdict overrides drop type
+        const embedColor = profitData ? verdict.color : (isRealDrop ? 0x00FF00 : isRestock ? 0x00BFFF : 0xFFD700);
+
+        const profitBreakdown = profitData
+            ? `Retail: $${payload.price.toFixed(2)} + ~$${config.EstimatedShipping || 10} ship = **$${profitData.totalCost.toFixed(2)}** cost\nStockX payout: **$${profitData.payout.toFixed(2)}** (after ${config.PlatformFeePercent || 12}% fee)`
+            : 'Market price unavailable — verify manually on StockX/GOAT';
 
         const embed = new EmbedBuilder()
-            .setTitle(`🚨 REAL-TIME DROP DETECTED: ${headline}`)
+            .setTitle(`🚨 ${headline}: ${verdict.emoji} ${profitData ? (profitData.trueProfit >= 30 ? 'SNIPE' : profitData.trueProfit >= 1 ? 'LOW MARGIN' : 'BRICK') : 'VERIFY'}`)
             .setColor(embedColor)
             .setDescription(`**Status**: ${payload.status} | Verified 24/7 by Ghost Sniper Engine.`)
             .addFields(
                 { name: 'Product', value: `**${payload.product}**` },
-                { name: 'Price', value: `$${payload.price.toFixed(2)}`, inline: true },
+                { name: 'Retail Price', value: `$${payload.price.toFixed(2)}`, inline: true },
                 { name: 'Market (StockX)', value: payload.marketPrice ? `$${payload.marketPrice.toFixed(2)}` : 'N/A', inline: true },
-                { name: 'Est. Profit', value: payload.estimatedProfit ? `**$${payload.estimatedProfit.toFixed(2)}**` : 'Review Manually', inline: true },
+                { name: '💰 Verdict', value: `**${verdict.verdict}**`, inline: true },
+                { name: '📊 Profit Breakdown', value: profitBreakdown },
                 { name: 'Site', value: payload.site, inline: true },
                 { name: 'Hype Velocity', value: `📈 ${globalHypeScore || 0} mentions/min`, inline: true },
                 { name: 'Link', value: payload.link },
                 { name: 'Quick Checkout', value: `[Add to Cart](${payload.checkoutUrl})` }
             )
-            .setFooter({ text: 'Elite Sniper Alpha | Stealth: Ghost Mode Active' })
+            .setFooter({ text: 'Ghost Sniper v11 | Profit Intelligence Active' })
             .setTimestamp(new Date(payload.timestamp));
 
-        const ttsMessage = `Sniper Alert. ${headline}. ${payload.product}. Retail $${payload.price.toFixed(2)}.`;
+        // Phase 11: TTS includes verdict
+        const verdictWord = profitData ? (profitData.trueProfit >= 30 ? 'SNIPE' : profitData.trueProfit >= 1 ? 'Low Margin' : 'BRICK') : 'Verify Manually';
+        const ttsMessage = `Sniper Alert. ${verdictWord}. ${payload.product}. Retail $${payload.price.toFixed(2)}.`;
         await channel.send({ content: ttsMessage, tts: true, embeds: [embed] });
-        console.log(`Alert sent for ${payload.product}`);
+        console.log(`Alert sent for ${payload.product} [${verdictWord}]`);
     } catch (error) {
         console.error('Error sending Discord alert:', error);
     }
@@ -360,20 +386,16 @@ async function checkShopifySite(target) {
             }
 
             if (triggerAlert) {
-                // ADDING AI ROI SCORING (Phase 2)
+                // Phase 11: Autonomous Profit Intelligence
                 const marketPrice = await getMarketPrice(globalBrowser, title);
-                let profit = null;
-                if (marketPrice) {
-                    // Partner Strategy: Reflect 2026 fees (Avg 9% + shipping costs + processing)
-                    // We use 0.85 as a conservative "Net Payout" multiplier
-                    profit = (marketPrice * 0.85) - price; 
-                    
-                    // Phase 4: Hype Velocity Adjustment (Refining Hype ROI)
-                    if (globalHypeScore > 30) {
-                        console.log(`  └ High Hype Velocity (+${globalHypeScore}) - Adjusting Score...`);
-                        // Social hype is a multiplier for "Sellability" not just raw profit
-                        profit += (globalHypeScore / 4); 
-                    }
+                const profitData = calculateTrueProfit(price, marketPrice);
+                
+                // MinProfitThreshold gate: suppress alerts below threshold if set > 0
+                const minProfit = config.MinProfitThreshold || 0;
+                if (minProfit > 0 && profitData && profitData.trueProfit < minProfit) {
+                    console.log(`[SKIP] ${title} - Profit $${profitData.trueProfit.toFixed(2)} below threshold $${minProfit}`);
+                    history[link] = { price, status: currentStatus, timestamp: new Date().toISOString() };
+                    continue;
                 }
 
                 const payload = {
@@ -384,12 +406,12 @@ async function checkShopifySite(target) {
                     site: target.site,
                     price: price,
                     marketPrice: marketPrice,
-                    estimatedProfit: profit,
+                    profitData: profitData,
                     checkoutUrl: `${target.url.split('/products.json')[0]}/cart/${firstVariant.id}:1`
                 };
                 
-                // Only alert on Discord if it matches keywords or restock watchlist
-                console.log(`[ALERT] ${target.site}: ${title} - ${alertStatus} (Est. Profit: ${profit ? '$'+profit.toFixed(2) : 'N/A'})`);
+                const verdictStr = profitData ? `$${profitData.trueProfit.toFixed(2)}` : 'N/A';
+                console.log(`[ALERT] ${target.site}: ${title} - ${alertStatus} (True Profit: ${verdictStr})`);
                 await sendDiscordAlert(payload);
                 await logToGoogleSheets(payload);
             }
@@ -462,24 +484,27 @@ async function checkBrowserSite(target, browser) {
         const keywordMatch = matchesKeywords(data.productName);
         if (triggerAlert && (keywordMatch || isRestockWatchlisted(target.url))) {
             const marketPrice = await getMarketPrice(globalBrowser, data.productName);
-            let profit = null;
-            if (marketPrice) {
-                profit = (marketPrice * 0.85) - price;
+            const profitData = calculateTrueProfit(price, marketPrice);
+            
+            // MinProfitThreshold gate
+            const minProfit = config.MinProfitThreshold || 0;
+            if (minProfit > 0 && profitData && profitData.trueProfit < minProfit) {
+                console.log(`[SKIP] ${data.productName} - Profit $${profitData.trueProfit.toFixed(2)} below threshold $${minProfit}`);
+            } else {
+                const payload = {
+                    product: data.productName,
+                    status: alertStatus,
+                    timestamp: new Date().toISOString(),
+                    link: link,
+                    site: target.site,
+                    price: price,
+                    marketPrice: marketPrice,
+                    profitData: profitData,
+                    checkoutUrl: link
+                };
+                await sendDiscordAlert(payload);
+                await logToGoogleSheets(payload);
             }
-
-            const payload = {
-                product: data.productName,
-                status: alertStatus,
-                timestamp: new Date().toISOString(),
-                link: link,
-                site: target.site,
-                price: price,
-                marketPrice: marketPrice,
-                estimatedProfit: profit,
-                checkoutUrl: link // Non-Shopify usually just back to page
-            };
-            await sendDiscordAlert(payload);
-            await logToGoogleSheets(payload);
         }
 
         history[link] = { price, status: data.buyEnabled ? 'Available' : 'Sold Out', timestamp: new Date().toISOString() };

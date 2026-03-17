@@ -1,6 +1,9 @@
 {
   "MinAlertPrice": 1.0,
   "CheckIntervalMinutes": 15,
+  "EstimatedShipping": 10,
+  "PlatformFeePercent": 12,
+  "MinProfitThreshold": 0,
   "EliteKeywords": [
     "Travis Scott", "Jordan 1", "Jordan 3", "Jordan 4", "Jordan 5", "Jordan 11",
     "Labubu", "Pokemon", "Box Logo", "Corteiz", "Bape", "Supreme", "Dunk SB", 

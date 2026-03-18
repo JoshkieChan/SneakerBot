@@ -276,10 +276,19 @@ async function sendDiscordAlert(payload) {
             ? `Retail: $${payload.price.toFixed(2)} + ~$${config.EstimatedShipping || 10} ship = **$${profitData.totalCost.toFixed(2)}** cost\nStockX payout: **$${profitData.payout.toFixed(2)}** (after ${config.PlatformFeePercent || 12}% fee)`
             : 'Market price unavailable — verify manually on StockX/GOAT';
 
+        // Phase 15: Size-Aware Alpha Logic
+        const isApparel = payload.product.toLowerCase().includes('jacket') || 
+                          payload.product.toLowerCase().includes('sweatpant') || 
+                          payload.product.toLowerCase().includes('pant') || 
+                          payload.product.toLowerCase().includes('hoodie') ||
+                          payload.product.toLowerCase().includes('shirt') ||
+                          payload.product.toLowerCase().includes('tee');
+        const sizeAlpha = isApparel && config.EliteSizes ? `\n\n**📐 Elite Sizes (Max Margin)**: ${config.EliteSizes.join(', ')}` : "";
+
         const embed = new EmbedBuilder()
             .setTitle(`🚨 ${headline}: ${verdict.emoji} ${profitData ? (profitData.trueProfit >= 30 ? 'SNIPE' : profitData.trueProfit >= 1 ? 'LOW MARGIN' : 'BRICK') : 'VERIFY'}`)
             .setColor(embedColor)
-            .setDescription(`**Status**: ${payload.status} | Verified 24/7 by Ghost Sniper Engine.`)
+            .setDescription(`**Status**: ${payload.status} | Verified 24/7 by Ghost Sniper Engine.${sizeAlpha}`)
             .addFields(
                 { name: 'Product', value: `**${payload.product}**` },
                 { name: 'Retail Price', value: `$${payload.price.toFixed(2)}`, inline: true },
@@ -291,7 +300,7 @@ async function sendDiscordAlert(payload) {
                 { name: 'Link', value: payload.link },
                 { name: 'Quick Checkout', value: `[Add to Cart](${payload.checkoutUrl})` }
             )
-            .setFooter({ text: 'Ghost Sniper v11 | Profit Intelligence Active' })
+            .setFooter({ text: 'Ghost Sniper v12 | Size-Aware Intelligence Active' })
             .setTimestamp(new Date(payload.timestamp));
 
         // Phase 11: TTS includes verdict

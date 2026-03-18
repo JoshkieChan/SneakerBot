@@ -453,6 +453,16 @@ async function checkShopifySite(target) {
                     continue;
                 }
 
+                // Phase 16: Capital Velocity & Liquidity Filtering
+                if (config.RequireHighVelocity) {
+                    const isEliteCollab = config.EliteKeywords.some(kw => title.toLowerCase().includes(kw.toLowerCase()));
+                    if (!isEliteCollab && (global.globalHypeScore || 0) < 15) {
+                        console.log(`[SKIP - LIQUIDITY TRAP] ${title} - Low velocity apparel. Prevented dead capital.`);
+                        history[link] = { price, status: currentStatus, timestamp: new Date().toISOString() };
+                        continue;
+                    }
+                }
+
                 const payload = {
                     product: title,
                     status: alertStatus,

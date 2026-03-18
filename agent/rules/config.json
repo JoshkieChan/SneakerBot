@@ -15,9 +15,11 @@
     "Eric Emanuel", "Bape Sta", "Sp5der"
   ],
   "EliteNegativeKeywords": [
-    "Socks", "Laces", "Keychain", "Sticker", "Poster", "Cleaning Kit", "Crep Protect", "Reshoevn8r"
+    "Socks", "Laces", "Keychain", "Sticker", "Poster", "Cleaning Kit", "Crep Protect", "Reshoevn8r",
+    "Sweatpant", "Pant", "Trousers", "Shorts", "Underwear"
   ],
-  "EliteSizes": ["XL", "XXL", "S", "M", "L"],
+  "EliteSizes": ["XL", "XXL"],
+  "RequireHighVelocity": true,
   "EarlyLinks": [],
   "RestockWatchlist": [],
   "SocialHypeSources": [

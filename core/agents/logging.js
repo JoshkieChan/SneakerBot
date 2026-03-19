@@ -10,6 +10,7 @@ class LoggingAgent {
         this.config = config;
         this.historyPath = path.join(__dirname, '../../data/history.json');
         this.tradesPath = path.join(__dirname, '../../data/trades.json');
+        this.engineLogPath = path.join(__dirname, '../../logs/engine.log');
         this.errorLogPath = path.join(__dirname, '../../logs/errors.log');
         
         // Ensure directories exist
@@ -18,6 +19,7 @@ class LoggingAgent {
     }
 
     async persist(signal) {
+        const timestamp = new Date().toISOString();
         console.log(`[LOGGING] Persisting Signal: ${signal.product.title}...`);
         
         // 1. Update History (Deduplication)
@@ -28,18 +30,22 @@ class LoggingAgent {
         history[signal.product.link] = {
             price: signal.product.price,
             status: signal.product.available ? 'Available' : 'Sold Out',
-            timestamp: new Date().toISOString()
+            timestamp
         };
         fs.writeFileSync(this.historyPath, JSON.stringify(history, null, 2));
 
-        // 2. Log Trade (Full Cargo)
-        if (signal.execution.verdict !== 'SKIP') {
+        // 2. Engine Log (Decision history)
+        const logEntry = `[${timestamp}] [${signal.execution.verdict}] ${signal.product.title} | Price: $${signal.product.price}\n`;
+        fs.appendFileSync(this.engineLogPath, logEntry);
+
+        // 3. Log Trade (Full Cargo for BUYs)
+        if (signal.execution.verdict.includes('BUY')) {
             let trades = [];
             if (fs.existsSync(this.tradesPath)) {
                 trades = JSON.parse(fs.readFileSync(this.tradesPath, 'utf8'));
             }
             trades.push({
-                tradeId: `TRD-${Date.now()}`,
+                tradeId: signal.tradeId,
                 userId: signal.userId || 'default',
                 sessionId: signal.sessionId || 'default',
                 ...signal

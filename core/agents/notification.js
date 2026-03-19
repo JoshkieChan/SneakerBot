@@ -29,35 +29,35 @@ class NotificationAgent {
             const en = { ...signal.intelligence, ...signal.risk, ...signal.execution };
             const prod = signal.product;
 
+            const isBuy = ['STRONG BUY', 'BUY SMALL'].includes(en.verdict);
             const embedColor = en.verdict === 'STRONG BUY' ? 0x00FF00 : (en.verdict === 'WATCH' ? 0xFFD700 : 0xFF0000);
+            
+            const ticketHeader = isBuy ? '🎫 EXECUTION TICKET' : `🚨 ${en.verdict}`;
             
             const descriptionBlock = `
 **Item**: ${prod.title}
 **Brand**: ${prod.vendor || 'Unknown'}
-
 **Price**: $${prod.price.toFixed(2)}
-**Worst Case Profit**: $${en.worstCaseProfit ? en.worstCaseProfit.toFixed(2) : 'N/A'}
 
 **Market Analysis**:
-- Resale Confidence: ${en.resaleConfidence}
-- Liquidity: ${en.liquidity}
-- Brand Strength: ${en.brandStrength}
-
-**Opportunity Score**: ${score}/100
-
-**Validation Layer**:
+- Expected Profit (Worst Case): $${en.worstCaseProfit ? en.worstCaseProfit.toFixed(2) : 'N/A'}
 - Risk Level: ${en.riskLevel}
 - Data Quality: ${en.resaleConfidence}
-- Anomalies: ${signal.risk.anomalies?.join(', ') || 'None'}
 
-**FINAL DECISION**:
+**Intelligence**:
+- Opportunity Score: ${score}/100
+- Liquidity: ${en.liquidity}
+
+**RECOMMENDED ACTION**:
 - **${en.verdict}**
 
 **Trade ID**: ${signal.tradeId || 'N/A'}
+---
+*This ticket requires human approval before manual execution.*
             `;
 
             const embed = new EmbedBuilder()
-                .setTitle(`🚨 ${en.verdict}: ${prod.title}`)
+                .setTitle(`${ticketHeader}: ${prod.title}`)
                 .setURL(prod.link)
                 .setColor(embedColor)
                 .setDescription(descriptionBlock)

@@ -8,43 +8,49 @@ class IntelligenceAgent {
     }
 
     async analyze(signal) {
-        console.log(`[INTELLIGENCE] Analyzing: ${signal.product.title}...`);
-        
-        let score = 50; // Base score
-        const tiers = this.config.EliteKeywordTiers || {};
-        
-        // 1. Keyword Tier Scoring
-        let matchedTier = null;
-        for (const [tierName, tierData] of Object.entries(tiers)) {
-            const match = tierData.keywords && tierData.keywords.find(k => {
-                const regex = new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        try {
+            console.log(`[INTELLIGENCE] Analyzing: ${signal.product.title}...`);
+            
+            let score = 50; // Base score
+            const tiers = this.config.EliteKeywordTiers || {};
+            
+            // 1. Keyword Tier Scoring
+            let matchedTier = null;
+            for (const [tierName, tierData] of Object.entries(tiers)) {
+                const match = tierData.keywords && tierData.keywords.find(k => {
+                    const regex = new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+                    return regex.test(signal.product.title);
+                });
+                if (match) {
+                    matchedTier = tierName;
+                    score += (tierData.weight || 0);
+                    break;
+                }
+            }
+
+            // 2. Negative keyword check
+            const negativeMatch = this.config.EliteNegativeKeywords && this.config.EliteNegativeKeywords.some(neg => {
+                const regex = new RegExp(`\\b${neg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
                 return regex.test(signal.product.title);
             });
-            if (match) {
-                matchedTier = tierName;
-                score += (tierData.weight || 0);
-                break;
-            }
+            if (negativeMatch) score -= 50;
+
+            // 3. Category/Brand analysis
+            signal.intelligence = {
+                score,
+                matchedTier,
+                matchedKeywords: [],
+                resaleConfidence: score >= 70 ? 'High' : (score >= 50 ? 'Medium' : 'Low'),
+                liquidity: 'Medium',
+                brandStrength: 'Medium'
+            };
+
+            return signal;
+        } catch (error) {
+            console.error(`[INTELLIGENCE ERROR] ${error.message}`);
+            signal.intelligence = { score: 0, status: 'ERROR' };
+            return signal;
         }
-
-        // 2. Negative keyword check
-        const negativeMatch = this.config.EliteNegativeKeywords && this.config.EliteNegativeKeywords.some(neg => {
-            const regex = new RegExp(`\\b${neg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-            return regex.test(signal.product.title);
-        });
-        if (negativeMatch) score -= 50;
-
-        // 3. Category/Brand analysis (Mocked or logic-based)
-        signal.intelligence = {
-            score,
-            matchedTier,
-            matchedKeywords: [],
-            resaleConfidence: score >= 70 ? 'High' : (score >= 50 ? 'Medium' : 'Low'),
-            liquidity: 'Medium',
-            brandStrength: 'Medium'
-        };
-
-        return signal;
     }
 }
 

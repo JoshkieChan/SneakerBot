@@ -14,9 +14,11 @@ RUN npm install
 # Copy the rest of the application
 COPY . .
 
-# Ensure history.json exists so the volume mount doesn't create a directory
-RUN touch agent/rules/history.json && chmod 666 agent/rules/history.json
+# Ensure data and logs directories exist with correct permissions
+RUN mkdir -p data logs && \
+    touch data/history.json && chmod 666 data/history.json && \
+    chmod -R 777 data logs
 
 # Environment variables will be injected at runtime
-# CMD specifies how to run the bot
-CMD ["node", "scripts/monitor.js"]
+# CMD specifies the new modular entry point
+CMD ["node", "index.js"]

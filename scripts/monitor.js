@@ -81,20 +81,26 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // Phase 17: Engine Handled in engine.js
 
 function matchesKeywords(title) {
-    if (title.toLowerCase().includes('test_item')) return true; // Partner Verification Hook
-    if (!config.EliteKeywords || config.EliteKeywords.length === 0) return false;
+    if (title.toLowerCase().includes('test_item')) return true; 
+
+    // Phase 20: Tiered Keyword Filter
+    const tiers = config.EliteKeywordTiers || {};
+    let allKeywords = [];
+    for (const tierData of Object.values(tiers)) {
+        if (tierData.keywords) allKeywords = allKeywords.concat(tierData.keywords);
+    }
+
+    if (allKeywords.length === 0) return false;
     
-    // Phase 13: Negative Keyword Filter (Elite Noise Reduction)
+    // Phase 13: Negative Keyword Filter
     const negativeMatch = config.EliteNegativeKeywords && config.EliteNegativeKeywords.some(neg => {
         const regex = new RegExp(`\\b${neg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
         return regex.test(title);
     });
     if (negativeMatch) return false;
 
-    return config.EliteKeywords.some(keyword => {
-        // Escape special regex characters in the keyword
+    return allKeywords.some(keyword => {
         const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Use word boundaries \b to ensure "Jordan 1" doesn't match "Jordan 13"
         const regex = new RegExp(`\\b${escapedKeyword}\\b`, 'i');
         return regex.test(title);
     });

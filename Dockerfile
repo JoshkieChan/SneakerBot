@@ -16,7 +16,7 @@ COPY . .
 
 # Ensure data and logs directories exist with correct permissions
 RUN mkdir -p data logs && \
-    touch data/history.json && chmod 666 data/history.json && \
+    touch data/trades.json && chmod 666 data/trades.json && \
     chmod -R 777 data logs
 
 # Environment variables will be injected at runtime

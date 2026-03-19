@@ -248,21 +248,15 @@ async function sendDiscordAlert(payload) {
         let headline = 'PRICE DROP';
         if (isRealDrop) headline = 'NEW HYPE DROP';
         else if (isRestock) headline = 'RESTOCK DETECTED';
-        const en = payload.engine;
-        
-        let decisionEmoji = '🟢';
-        let embedColor = 0x00FF00;
-        if (en.verdict === 'WATCH') { decisionEmoji = '🟡'; embedColor = 0xFFD700; }
-        else if (en.verdict.includes('SKIP')) { decisionEmoji = '🔴'; embedColor = 0xFF0000; }
-        
         const descriptionBlock = `
 **Item**: ${payload.product}
+**Brand**: ${en.brand}
 
 **Retail Price**: $${payload.price.toFixed(2)}
 **Current Price**: $${payload.price.toFixed(2)}
 **Estimated Total Cost**: $${en.totalCost.toFixed(2)}
 
-**Category**: ${en.categoryStrength === 'Strong' ? 'Jackets/Hoodies/Outwear' : 'Apparel/Basics'}
+**Category**: ${en.category}
 **Discount**: ${en.discount}%
 
 **Market Analysis**:
@@ -271,9 +265,9 @@ async function sendDiscordAlert(payload) {
 - Liquidity: ${en.liquidity}
 
 **Size Intelligence**:
-- Fastest Sizes: XL, XXL
-- Remaining Sizes: M, L
-- Verdict: ${en.categoryStrength === 'Strong' ? 'Favorable' : 'Neutral'}
+- Fastest Sizes: ${en.fastestSizes}
+- Remaining Sizes: ${en.remainingSizes}
+- Verdict: ${en.sizeVerdict}
 
 **Resale Intelligence**:
 - Evidence: ${en.resaleEvidence}
@@ -288,16 +282,12 @@ async function sendDiscordAlert(payload) {
 **Risk Level**: ${en.riskLevel}
 **Time Sensitivity**: ${en.timeSensitivity}
 
-**Validation Layer**:
-- Resale Confidence: ${en.resaleConfidence}
-- Data Quality: ${en.dataQuality}
-- Simulation Confidence: ${en.simulationConfidence}
-
-*Human Verification Required*:
-- Check real sales manually before buying
-- Confirm demand on resale platforms
-
 **Opportunity Score**: ${en.finalScore}/100
+
+**Validation Layer**:
+- Data Quality: ${en.dataQuality}
+- Resale Confidence: ${en.resaleConfidence}
+- Simulation Confidence: ${en.simulationConfidence}
 
 **FINAL DECISION**:
 - **${en.verdict}**

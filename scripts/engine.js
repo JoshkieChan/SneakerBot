@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const TRADES_FILE = path.join(__dirname, '../agent/rules/trades.json');
+const CONFIG_PATH = path.join(__dirname, '../agent/rules/config.json');
 
 function getTradesData() {
     if (!fs.existsSync(TRADES_FILE)) {
@@ -17,151 +18,155 @@ function saveTrade(trade) {
     fs.writeFileSync(TRADES_FILE, JSON.stringify(data, null, 2));
 }
 
-function evaluateTrade(title, retailPrice, marketPrice, isLimited, isRestock, originalPrice = null) {
+function loadConfig() {
+    return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+}
+
+/**
+ * 14-STEP AUTONOMOUS DECISION ENGINE
+ */
+function evaluateTrade(title, currentPrice, marketPrice, isLimited, isRestock, originalPrice = null) {
+    const config = loadConfig();
     const titleL = title.toLowerCase();
+    let score = 0;
+    let logs = [];
+
+    // STEP 1 — KEYWORD MATCHING
+    let keywordTier = null;
+    let brandWeight = 0;
     
-    // 1. BRAND STRENGTH
-    let brandStrength = 'Low';
-    let brandScore = 0;
-    const strongBrands = ['jordan', 'travis scott', 'off-white', 'kobe', 'chrome hearts', 'supreme', 'asics'];
-    const medBrands = ['stussy', 'fear of god', 'essentials', 'kith', 'dunk sb', 'new balance', 'sp5der', 'bape'];
-    
-    if (strongBrands.some(b => titleL.includes(b))) { brandStrength = 'High'; brandScore = 20; }
-    else if (medBrands.some(b => titleL.includes(b))) { brandStrength = 'Medium'; brandScore = 12; }
-    else { brandScore = 5; }
-    
-    // 2. DISCOUNT QUALITY
-    let discount = 0;
-    let discountScore = 0;
-    if (originalPrice && originalPrice > retailPrice) {
-        discount = Math.round(((originalPrice - retailPrice) / originalPrice) * 100);
+    for (const [tier, data] of Object.entries(config.EliteKeywordTiers)) {
+        if (data.keywords.some(kw => titleL.includes(kw.toLowerCase()))) {
+            keywordTier = tier;
+            brandWeight = data.weight;
+            break;
+        }
     }
-    if (discount >= 30) { discountScore = 15; }
-    else if (discount >= 15) { discountScore = 8; }
     
-    // 3. CATEGORY STRENGTH
-    let categoryStrength = 'Weak';
-    let categoryScore = 0;
-    if (titleL.includes('jacket') || titleL.includes('hoodie') || titleL.includes('outerwear') || titleL.includes('jordan 1') || titleL.includes('kobe') || isLimited) {
-        categoryStrength = 'Strong'; categoryScore = 15;
-    } else if (titleL.includes('pant') || titleL.includes('crewneck') || titleL.includes('sweat')) {
-        categoryStrength = 'Medium'; categoryScore = 8;
-    } else {
-        categoryStrength = 'Weak'; categoryScore = -5; // Penalty for weak basics
+    if (!keywordTier) return { verdict: 'SKIP (No Keyword Match)', finalScore: 0 };
+    score += brandWeight;
+
+    // STEP 2 — NEGATIVE FILTER
+    if (config.EliteNegativeKeywords.some(neg => titleL.includes(neg.toLowerCase()))) {
+        return { verdict: 'SKIP (Negative Keyword)', finalScore: 0 };
     }
 
-    // 8. PRICE GAP CALCULATION
-    const tax = retailPrice * 0.08;
-    const shipping = 10.00;
-    const totalCost = retailPrice + tax + shipping;
+    // STEP 3 — PRICE FILTER
+    if (currentPrice < config.MinAlertPrice) {
+        return { verdict: 'SKIP (Below Min Price)', finalScore: 0 };
+    }
+
+    // STEP 4 — SIZE INTELLIGENCE
+    // Logic: Favor M/L/XL. Penalize S/XS. XXL conditional.
+    // For this engine, we assume the variant being checked is the one passed.
+    // However, since we scan the whole products.json, we look for the "Alpha" sizes.
+    const fastestSizes = config.EliteSizes.join(', ');
+    const remainingSizes = "S, XXL";
+    let sizeVerdict = "Neutral";
+    let sizeScore = config.SizeWeighting["L"] || 10; // Default to neutral Large weight
+    score += sizeScore;
+
+    // STEP 5 — DISCOUNT ANALYSIS
+    let discountPercent = 0;
+    if (originalPrice && originalPrice > currentPrice) {
+        discountPercent = Math.round(((originalPrice - currentPrice) / originalPrice) * 100);
+    }
     
-    // ENHANCED RESALE VALIDATION
-    let resaleEvidence = 'Weak';
-    let dataQuality = 'Assumed';
-    let resaleConfidence = 'LOW';
-    let evidenceScore = -30; // MAJOR penalty default
+    if (discountPercent >= config.DiscountRules.Strong.min) {
+        score += config.DiscountRules.Strong.scoreBoost;
+    } else if (discountPercent >= config.DiscountRules.Moderate.min) {
+        score += config.DiscountRules.Moderate.scoreBoost;
+    } else {
+        score += config.DiscountRules.Weak.scorePenalty;
+    }
+
+    // STEP 6 — RESALE VALIDATION (CRITICAL)
+    let dataQuality = 'Listings Only'; // Scraper default
+    let resaleConfidence = 'Medium';
+    let resaleEvidence = 'Moderate';
+
+    // Anti-Hype Logic
+    if (config.AntiHypeFilters.RequireResaleEvidence && !marketPrice) {
+        resaleConfidence = 'Low';
+        resaleEvidence = 'Weak';
+        score += config.AntiHypeFilters.NoSalesDataPenalty;
+    } else if (marketPrice) {
+        score += config.AntiHypeFilters.ListingsOnlyPenalty; 
+    }
+
+    // Resale Confidence Penalty
+    score += config.ResaleConfidencePenalty[resaleConfidence] || -15;
+
+    // STEP 7 — PROFIT CALCULATION
+    const estimatedShipping = config.EstimatedShipping || 12;
+    const totalCost = currentPrice + estimatedShipping;
+    const platformFee = config.PlatformFeePercent / 100;
     
     const expectedResale = marketPrice || 0;
-    let estimatedProfit = 0;
-    let profitScore = 0;
+    const payout = expectedResale * (1 - platformFee);
+    const estimatedProfit = expectedResale > 0 ? (payout - totalCost) : 0;
 
-    if (expectedResale > 0) {
-        dataQuality = 'Listings Only'; // Bot scrapes Lowest Ask by default right now
-        
-        if (expectedResale > retailPrice * 1.5 || (expectedResale > retailPrice * 1.2 && brandStrength === 'High')) {
-            resaleEvidence = 'Strong'; 
-            resaleConfidence = 'HIGH'; // Upgrade to HIGH if massive gap on a strong brand
-            evidenceScore = 5;
-        } else if (expectedResale > retailPrice * 1.1) {
-            resaleEvidence = 'Moderate';
-            resaleConfidence = 'MEDIUM';
-            evidenceScore = -10; // Still penalize slightly if just moderate listings
-        } else {
-            resaleEvidence = 'Weak';
-            resaleConfidence = 'LOW';
-            evidenceScore = -25;
-        }
-        
-        estimatedProfit = (expectedResale * 0.88) - totalCost;
-        if (estimatedProfit >= 25) { profitScore = 15; }
-        else if (estimatedProfit >= 15) { profitScore = 5; }
-        else if (estimatedProfit >= 5) { profitScore = -10; } // Thin profit penalty
-        else { profitScore = -20; } 
+    if (estimatedProfit >= config.StrongProfitThreshold) {
+        score += 20; // Internal boost for high margin
+    } else if (estimatedProfit < config.MinProfitThreshold) {
+        score -= 20; // Internal penalty for thin margin
     }
 
-    // 4. LIQUIDITY
-    let liquidity = 'Low';
-    let liquidityScore = -10; // Slow liquidity penalty
-    if (resaleConfidence === 'HIGH' && (isLimited || brandStrength === 'High' || categoryStrength === 'Strong')) { 
-        liquidity = 'High'; liquidityScore = 10; 
-    } else if (resaleConfidence === 'MEDIUM' || brandStrength === 'Medium') { 
-        liquidity = 'Medium'; liquidityScore = 0; 
+    // STEP 8 — LIQUIDITY ANALYSIS
+    let liquidity = 'Medium';
+    if (brandWeight >= 10 && estimatedProfit >= 25) {
+        liquidity = 'High';
+        score += config.LiquidityRules.High.scoreBoost;
+    } else {
+        liquidity = 'Low';
+        score += config.LiquidityRules.Low.scorePenalty;
     }
-    
-    // 6. SIZE INTELLIGENCE (Default assumption based on category)
-    let sizeIntelScore = 5; 
 
-    // SCORING
-    let finalScore = brandScore + discountScore + categoryScore + evidenceScore + profitScore + liquidityScore + sizeIntelScore;
-    if (finalScore > 100) finalScore = 100;
-    if (finalScore < 0) finalScore = 0;
-    
-    // DECISION RESTRICTIONS
+    // STEP 9 — SCORING ENGINE (Final normalization)
+    let finalScore = Math.max(0, Math.min(100, score));
+
+    // STEP 10 — DECISION LOGIC
     let verdict = 'SKIP';
-    let recommendedUnits = 0;
-    let riskLevel = 'High';
-    let flipType = 'HOLD';
-    let timeSensitivity = 'Low';
-    let simulationConfidence = 'Low';
-    
-    // Base categorization before hard restrictions
-    if (finalScore >= 80) { verdict = 'STRONG BUY'; recommendedUnits = 1; riskLevel = 'Low'; flipType = 'FAST'; timeSensitivity = 'Immediate'; simulationConfidence = 'High'; }
-    else if (finalScore >= 65) { verdict = 'BUY SMALL'; recommendedUnits = 1; riskLevel = 'Medium'; timeSensitivity = 'Short'; simulationConfidence = 'Medium'; }
-    else if (finalScore >= 50) { verdict = 'WATCH'; recommendedUnits = 0; riskLevel = 'Medium'; }
+    const rules = config.ExecutionRules;
 
-    // STRICT OVERRIDES
-    // STRONG BUY allowed ONLY if: Profit >= $25 AND Resale Confidence = HIGH AND Liquidity = HIGH or MEDIUM
-    if (verdict === 'STRONG BUY' && (estimatedProfit < 25 || resaleConfidence !== 'HIGH' || liquidity === 'Low')) {
+    if (finalScore >= rules.StrongBuy.minScore && estimatedProfit >= rules.StrongBuy.minProfit && resaleConfidence === 'High') {
+        verdict = 'STRONG BUY';
+    } else if (finalScore >= rules.StrongBuy.minScore && estimatedProfit >= rules.StrongBuy.minProfit) {
+        // Downgrade if confidence isn't HIGH
         verdict = 'BUY SMALL';
-        finalScore = Math.min(finalScore, 79);
-        simulationConfidence = 'Medium';
-    }
-    
-    // BUY SMALL allowed ONLY if: Profit >= $10 AND Resale Confidence >= MEDIUM
-    if (verdict === 'BUY SMALL' && (estimatedProfit < 10 || resaleConfidence === 'LOW')) {
+    } else if (finalScore >= rules.BuySmall.minScore && estimatedProfit >= rules.BuySmall.minProfit) {
+        verdict = 'BUY SMALL';
+    } else if (finalScore >= rules.Watch.minScore) {
         verdict = 'WATCH';
-        recommendedUnits = 0;
-        finalScore = Math.min(finalScore, 64);
-        simulationConfidence = 'Low';
     }
 
-    // LOW Confidence block
-    if (resaleConfidence === 'LOW') {
-        if (verdict === 'STRONG BUY' || verdict === 'BUY SMALL') {
-            verdict = 'WATCH';
-            recommendedUnits = 0;
-            finalScore = Math.min(finalScore, 50);
+    // STRICT RULE: If Resale Confidence = LOW -> STRONG BUY is NOT allowed
+    if (resaleConfidence === 'Low' && verdict === 'STRONG BUY') {
+        verdict = 'BUY SMALL';
+    }
+
+    // STEP 11 — CAPITAL SIMULATION
+    const tradesData = getTradesData();
+    const portfolio = tradesData.portfolio;
+    const maxPerTrade = portfolio * config.MaxCapitalPerTradePercent;
+    let recommendedUnits = 0;
+
+    if (verdict === 'STRONG BUY' || verdict === 'BUY SMALL') {
+        recommendedUnits = 1;
+        if (verdict === 'STRONG BUY' && finalScore >= 90 && liquidity === 'High') {
+            recommendedUnits = 2;
         }
-    }
-    
-    // CAPTIAL RULES
-    const data = getTradesData();
-    const availableCap = data.portfolio;
-    const maxPerItem = 150; 
-    
-    if (verdict === 'STRONG BUY' && liquidity === 'High' && (totalCost * 2) <= maxPerItem && estimatedProfit >= 30) {
-        recommendedUnits = 2; 
-    }
+        
+        const totalTradeCost = totalCost * recommendedUnits;
+        const remainingCapPercent = (portfolio - totalTradeCost) / 500; // Original 500 baseline
 
-    // Enforce Budget
-    if (availableCap - (totalCost * recommendedUnits) < 100) { 
-        recommendedUnits = Math.floor((availableCap - 100) / totalCost);
-        if (recommendedUnits <= 0 && (verdict === 'STRONG BUY' || verdict === 'BUY SMALL')) {
-            verdict = 'SKIP (Capital Limit Reached)';
+        if (totalTradeCost > maxPerTrade || remainingCapPercent < config.MinRemainingCapitalPercent) {
+            verdict = 'SKIP (Capital Limit)';
             recommendedUnits = 0;
         }
     }
 
+    // STEP 12 — TRADE SIMULATION
     let tradeId = 'N/A';
     if (recommendedUnits > 0) {
         tradeId = 'TRD-' + Math.random().toString(36).substr(2, 6).toUpperCase();
@@ -171,15 +176,37 @@ function evaluateTrade(title, retailPrice, marketPrice, isLimited, isRestock, or
             buyPrice: totalCost,
             units: recommendedUnits,
             estimatedResale: expectedResale,
-            expectedProfit: estimatedProfit * recommendedUnits,
+            expectedProfit: Math.round(estimatedProfit * recommendedUnits),
             dateOpened: new Date().toISOString()
         });
     }
 
+    // STEP 13/14 — OUTPUT PREP
     return {
-        brandStrength, categoryStrength, liquidity, resaleEvidence, expectedResale, estimatedProfit, totalCost,
-        discount, finalScore, verdict, recommendedUnits, tradeId, riskLevel, flipType, timeSensitivity, availableCap,
-        resaleConfidence, dataQuality, simulationConfidence
+        brand: title.split(' ')[0],
+        totalCost,
+        category: (titleL.includes('jacket') || titleL.includes('hoodie')) ? 'Outerwear' : 'Clothing',
+        discount: discountPercent,
+        brandStrength: brandWeight >= 10 ? 'High' : 'Medium',
+        categoryStrength: (titleL.includes('jacket') || titleL.includes('hoodie')) ? 'Strong' : 'Medium',
+        liquidity,
+        fastestSizes,
+        remainingSizes,
+        sizeVerdict: (titleL.includes('jacket') || titleL.includes('hoodie')) ? 'Favorable' : 'Neutral',
+        resaleEvidence,
+        expectedResale,
+        estimatedProfit,
+        flipType: liquidity === 'High' ? 'FAST' : 'HOLD',
+        recommendedUnits,
+        riskLevel: finalScore >= 80 ? 'Low' : 'Medium',
+        timeSensitivity: finalScore >= 80 ? 'Immediate' : 'Short',
+        finalScore,
+        dataQuality,
+        resaleConfidence,
+        simulationConfidence: finalScore >= 85 ? 'High' : 'Medium',
+        verdict,
+        tradeId,
+        availableCap: portfolio
     };
 }
 

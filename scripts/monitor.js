@@ -21,6 +21,7 @@ puppeteer.use(StealthPlugin());
 
 const CONFIG_PATH = path.join(__dirname, '../agent/rules/config.json');
 const HISTORY_PATH = path.join(__dirname, '../agent/rules/history.json');
+const { evaluateTrade } = require('./engine.js');
 // Dynamic lookup for the service account file
 const SERVICE_ACCOUNT_FILE = fs.readdirSync(path.join(__dirname, '../agent/rules/'))
     .find(f => f.endsWith('.json') && f.includes('acquired-voice'));
@@ -77,24 +78,7 @@ function getRandomUserAgent() {
 // Sleep helper for mimicking human delays
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Phase 11: Autonomous Profit Intelligence Engine
-function calculateTrueProfit(retailPrice, marketPrice) {
-    if (!marketPrice || !retailPrice) return null;
-    const shipping = config.EstimatedShipping || 10;
-    const feePercent = (config.PlatformFeePercent || 12) / 100;
-    const totalCost = retailPrice + shipping;
-    const payout = marketPrice * (1 - feePercent);
-    const trueProfit = payout - totalCost;
-    return { trueProfit: Math.round(trueProfit * 100) / 100, totalCost, payout: Math.round(payout * 100) / 100 };
-}
-
-function getProfitVerdict(profitData) {
-    if (!profitData) return { verdict: '⚠️ VERIFY MANUALLY', color: 0xFFD700, emoji: '⚠️' };
-    const p = profitData.trueProfit;
-    if (p >= 30) return { verdict: `✅ SNIPE (+$${p.toFixed(2)})`, color: 0x00FF00, emoji: '✅' };
-    if (p >= 1)  return { verdict: `⚠️ LOW MARGIN (+$${p.toFixed(2)})`, color: 0xFFD700, emoji: '⚠️' };
-    return { verdict: `❌ BRICK (-$${Math.abs(p).toFixed(2)})`, color: 0xFF0000, emoji: '❌' };
-}
+// Phase 17: Engine Handled in engine.js
 
 function matchesKeywords(title) {
     if (title.toLowerCase().includes('test_item')) return true; // Partner Verification Hook
@@ -258,56 +242,77 @@ async function sendDiscordAlert(payload) {
         const channel = await client.channels.fetch(process.env.DISCORD_CHANNEL_ID);
         if (!channel) throw new Error('Channel not found');
 
-        // Phase 11: Profit Verdict System
-        const profitData = payload.profitData;
-        const verdict = getProfitVerdict(profitData);
-
         const isRealDrop = payload.status.toLowerCase().includes('new') || payload.status.toLowerCase().includes('hype');
         const isRestock = payload.status.toLowerCase().includes('restock') || payload.status.toLowerCase().includes('stock');
         
         let headline = 'PRICE DROP';
         if (isRealDrop) headline = 'NEW HYPE DROP';
         else if (isRestock) headline = 'RESTOCK DETECTED';
+        const en = payload.engine;
+        
+        let decisionEmoji = '🟢';
+        let embedColor = 0x00FF00;
+        if (en.verdict === 'WATCH') { decisionEmoji = '🟡'; embedColor = 0xFFD700; }
+        else if (en.verdict.includes('SKIP')) { decisionEmoji = '🔴'; embedColor = 0xFF0000; }
+        
+        const descriptionBlock = `
+**Item**: ${payload.product}
 
-        // Color priority: Profit verdict overrides drop type
-        const embedColor = profitData ? verdict.color : (isRealDrop ? 0x00FF00 : isRestock ? 0x00BFFF : 0xFFD700);
+**Retail Price**: $${payload.price.toFixed(2)}
+**Current Price**: $${payload.price.toFixed(2)}
+**Estimated Total Cost**: $${en.totalCost.toFixed(2)}
 
-        const profitBreakdown = profitData
-            ? `Retail: $${payload.price.toFixed(2)} + ~$${config.EstimatedShipping || 10} ship = **$${profitData.totalCost.toFixed(2)}** cost\nStockX payout: **$${profitData.payout.toFixed(2)}** (after ${config.PlatformFeePercent || 12}% fee)`
-            : 'Market price unavailable — verify manually on StockX/GOAT';
+**Category**: ${en.categoryStrength === 'Strong' ? 'Jackets/Hoodies/Outwear' : 'Apparel/Basics'}
+**Discount**: ${en.discount}%
 
-        // Phase 15: Size-Aware Alpha Logic
-        const isApparel = payload.product.toLowerCase().includes('jacket') || 
-                          payload.product.toLowerCase().includes('sweatpant') || 
-                          payload.product.toLowerCase().includes('pant') || 
-                          payload.product.toLowerCase().includes('hoodie') ||
-                          payload.product.toLowerCase().includes('shirt') ||
-                          payload.product.toLowerCase().includes('tee');
-        const sizeAlpha = isApparel && config.EliteSizes ? `\n\n**📐 Elite Sizes (Max Margin)**: ${config.EliteSizes.join(', ')}` : "";
+**Market Analysis**:
+- Brand Strength: ${en.brandStrength}
+- Category Strength: ${en.categoryStrength}
+- Liquidity: ${en.liquidity}
+
+**Size Intelligence**:
+- Fastest Sizes: XL, XXL
+- Remaining Sizes: M, L
+- Verdict: ${en.categoryStrength === 'Strong' ? 'Favorable' : 'Neutral'}
+
+**Resale Intelligence**:
+- Evidence: ${en.resaleEvidence}
+- Estimated Resale Price: $${en.expectedResale > 0 ? en.expectedResale.toFixed(2) : 'N/A'}
+- Estimated Profit: $${en.estimatedProfit.toFixed(2)}
+
+**Trade Plan**:
+- Flip Type: ${en.flipType}
+- Recommended Units: ${en.recommendedUnits}
+- Exit Strategy: StockX/GOAT/Alias
+
+**Risk Level**: ${en.riskLevel}
+**Time Sensitivity**: ${en.timeSensitivity}
+
+**Opportunity Score**: ${en.finalScore}/100
+
+**FINAL DECISION**:
+- **${en.verdict}**
+
+${en.tradeId !== 'N/A' ? `**Trade ID**: ${en.tradeId}` : ''}
+**Portfolio Available**: $${en.availableCap.toFixed(2)}
+        `;
 
         const embed = new EmbedBuilder()
-            .setTitle(`🚨 ${headline}: ${verdict.emoji} ${profitData ? (profitData.trueProfit >= 30 ? 'SNIPE' : profitData.trueProfit >= 1 ? 'LOW MARGIN' : 'BRICK') : 'VERIFY'}`)
+            .setTitle(`🚨 ${headline}: ${decisionEmoji} ${en.verdict}`)
             .setColor(embedColor)
-            .setDescription(`**Status**: ${payload.status} | Verified 24/7 by Ghost Sniper Engine.${sizeAlpha}`)
+            .setDescription(descriptionBlock)
             .addFields(
-                { name: 'Product', value: `**${payload.product}**` },
-                { name: 'Retail Price', value: `$${payload.price.toFixed(2)}`, inline: true },
-                { name: 'Market (StockX)', value: payload.marketPrice ? `$${payload.marketPrice.toFixed(2)}` : 'N/A', inline: true },
-                { name: '💰 Verdict', value: `**${verdict.verdict}**`, inline: true },
-                { name: '📊 Profit Breakdown', value: profitBreakdown },
                 { name: 'Site', value: payload.site, inline: true },
                 { name: 'Hype Velocity', value: `📈 ${globalHypeScore || 0} mentions/min`, inline: true },
-                { name: 'Link', value: payload.link },
                 { name: 'Quick Checkout', value: `[Add to Cart](${payload.checkoutUrl})` }
             )
-            .setFooter({ text: 'Ghost Sniper v12 | Size-Aware Intelligence Active' })
+            .setFooter({ text: 'Ghost Sniper Auto-Allocator | Phase 17 Active' })
             .setTimestamp(new Date(payload.timestamp));
 
         // Phase 11: TTS includes verdict
-        const verdictWord = profitData ? (profitData.trueProfit >= 30 ? 'SNIPE' : profitData.trueProfit >= 1 ? 'Low Margin' : 'BRICK') : 'Verify Manually';
-        const ttsMessage = `Sniper Alert. ${verdictWord}. ${payload.product}. Retail $${payload.price.toFixed(2)}.`;
+        const ttsMessage = `Sniper Alert. ${en.verdict}. ${payload.product}. Score ${en.finalScore}.`;
         await channel.send({ content: ttsMessage, tts: true, embeds: [embed] });
-        console.log(`Alert sent for ${payload.product} [${verdictWord}]`);
+        console.log(`Alert sent for ${payload.product} [${en.verdict}]`);
     } catch (error) {
         console.error('Error sending Discord alert:', error);
     }
@@ -441,26 +446,22 @@ async function checkShopifySite(target) {
             }
 
             if (triggerAlert) {
-                // Phase 11: Autonomous Profit Intelligence
+                // Phase 17: Autonomous Decision Engine Pipeline
                 const marketPrice = await getMarketPrice(globalBrowser, title);
-                const profitData = calculateTrueProfit(price, marketPrice);
                 
-                // MinProfitThreshold gate: suppress alerts below threshold if set > 0
-                const minProfit = config.MinProfitThreshold || 0;
-                if (minProfit > 0 && profitData && profitData.trueProfit < minProfit) {
-                    console.log(`[SKIP] ${title} - Profit $${profitData.trueProfit.toFixed(2)} below threshold $${minProfit}`);
+                const engine = evaluateTrade(
+                    title, 
+                    price, 
+                    marketPrice, 
+                    product.tags && product.tags.some(t => t.toLowerCase().includes('limited')),
+                    alertStatus.includes('RESTOCK'),
+                    firstVariant.compare_at_price ? parseFloat(firstVariant.compare_at_price) : price
+                );
+
+                if (engine.verdict.includes('SKIP')) {
+                    console.log(`[SKIP - ALLOCATOR] ${title} - ${engine.verdict} (Score ${engine.finalScore}/100)`);
                     history[link] = { price, status: currentStatus, timestamp: new Date().toISOString() };
                     continue;
-                }
-
-                // Phase 16: Capital Velocity & Liquidity Filtering
-                if (config.RequireHighVelocity) {
-                    const isEliteCollab = config.EliteKeywords.some(kw => title.toLowerCase().includes(kw.toLowerCase()));
-                    if (!isEliteCollab && (global.globalHypeScore || 0) < 15) {
-                        console.log(`[SKIP - LIQUIDITY TRAP] ${title} - Low velocity apparel. Prevented dead capital.`);
-                        history[link] = { price, status: currentStatus, timestamp: new Date().toISOString() };
-                        continue;
-                    }
                 }
 
                 const payload = {
@@ -471,12 +472,11 @@ async function checkShopifySite(target) {
                     site: target.site,
                     price: price,
                     marketPrice: marketPrice,
-                    profitData: profitData,
+                    engine: engine,
                     checkoutUrl: `${target.url.split('/products.json')[0]}/cart/${firstVariant.id}:1`
                 };
                 
-                const verdictStr = profitData ? `$${profitData.trueProfit.toFixed(2)}` : 'N/A';
-                console.log(`[ALERT] ${target.site}: ${title} - ${alertStatus} (True Profit: ${verdictStr})`);
+                console.log(`[ALERT] ${target.site}: ${title} - Decision: ${engine.verdict} (Score: ${engine.finalScore})`);
                 await sendDiscordAlert(payload);
                 await logToGoogleSheets(payload);
             }
@@ -549,12 +549,12 @@ async function checkBrowserSite(target, browser) {
         const keywordMatch = matchesKeywords(data.productName);
         if (triggerAlert && (keywordMatch || isRestockWatchlisted(target.url))) {
             const marketPrice = await getMarketPrice(globalBrowser, data.productName);
-            const profitData = calculateTrueProfit(price, marketPrice);
             
-            // MinProfitThreshold gate
-            const minProfit = config.MinProfitThreshold || 0;
-            if (minProfit > 0 && profitData && profitData.trueProfit < minProfit) {
-                console.log(`[SKIP] ${data.productName} - Profit $${profitData.trueProfit.toFixed(2)} below threshold $${minProfit}`);
+            // Phase 17 engine
+            const engine = evaluateTrade(data.productName, price, marketPrice, false, alertStatus.includes('RESTOCK'), price);
+
+            if (engine.verdict.includes('SKIP')) {
+                console.log(`[SKIP - ALLOCATOR] ${data.productName} - ${engine.verdict} (Score: ${engine.finalScore})`);
             } else {
                 const payload = {
                     product: data.productName,
@@ -564,7 +564,7 @@ async function checkBrowserSite(target, browser) {
                     site: target.site,
                     price: price,
                     marketPrice: marketPrice,
-                    profitData: profitData,
+                    engine: engine,
                     checkoutUrl: link
                 };
                 await sendDiscordAlert(payload);

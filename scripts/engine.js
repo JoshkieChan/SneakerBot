@@ -55,66 +55,108 @@ function evaluateTrade(title, retailPrice, marketPrice, isLimited, isRestock, or
     const shipping = 10.00;
     const totalCost = retailPrice + tax + shipping;
     
+    // ENHANCED RESALE VALIDATION
     let resaleEvidence = 'Weak';
-    let evidenceScore = -25; // MAJOR penalty by default (Anti-Hype Filter)
+    let dataQuality = 'Assumed';
+    let resaleConfidence = 'LOW';
+    let evidenceScore = -30; // MAJOR penalty default
     
     const expectedResale = marketPrice || 0;
     let estimatedProfit = 0;
     let profitScore = 0;
 
     if (expectedResale > 0) {
-        if (expectedResale > retailPrice * 1.2) {
-            resaleEvidence = 'Strong'; evidenceScore = 20;
-        } else if (expectedResale >= retailPrice) {
-            resaleEvidence = 'Moderate'; evidenceScore = 5;
+        dataQuality = 'Listings Only'; // Bot scrapes Lowest Ask by default right now
+        
+        if (expectedResale > retailPrice * 1.5 || (expectedResale > retailPrice * 1.2 && brandStrength === 'High')) {
+            resaleEvidence = 'Strong'; 
+            resaleConfidence = 'HIGH'; // Upgrade to HIGH if massive gap on a strong brand
+            evidenceScore = 5;
+        } else if (expectedResale > retailPrice * 1.1) {
+            resaleEvidence = 'Moderate';
+            resaleConfidence = 'MEDIUM';
+            evidenceScore = -10; // Still penalize slightly if just moderate listings
+        } else {
+            resaleEvidence = 'Weak';
+            resaleConfidence = 'LOW';
+            evidenceScore = -25;
         }
         
         estimatedProfit = (expectedResale * 0.88) - totalCost;
-        if (estimatedProfit >= 25) { profitScore = 25; }
-        else if (estimatedProfit >= 5) { profitScore = 10; }
-        else { profitScore = -15; } // Penalty for thin/no margin
+        if (estimatedProfit >= 25) { profitScore = 15; }
+        else if (estimatedProfit >= 15) { profitScore = 5; }
+        else if (estimatedProfit >= 5) { profitScore = -10; } // Thin profit penalty
+        else { profitScore = -20; } 
     }
 
     // 4. LIQUIDITY
     let liquidity = 'Low';
-    let liquidityScore = -10;
-    if (resaleEvidence === 'Strong' && (isLimited || brandStrength === 'High')) { liquidity = 'High'; liquidityScore = 15; }
-    else if (resaleEvidence === 'Moderate' || brandStrength === 'Medium') { liquidity = 'Medium'; liquidityScore = 5; }
+    let liquidityScore = -10; // Slow liquidity penalty
+    if (resaleConfidence === 'HIGH' && (isLimited || brandStrength === 'High' || categoryStrength === 'Strong')) { 
+        liquidity = 'High'; liquidityScore = 10; 
+    } else if (resaleConfidence === 'MEDIUM' || brandStrength === 'Medium') { 
+        liquidity = 'Medium'; liquidityScore = 0; 
+    }
     
     // 6. SIZE INTELLIGENCE (Default assumption based on category)
-    let sizeIntelScore = 5; // Default assumption that M/L/XL is prioritized
+    let sizeIntelScore = 5; 
 
     // SCORING
     let finalScore = brandScore + discountScore + categoryScore + evidenceScore + profitScore + liquidityScore + sizeIntelScore;
     if (finalScore > 100) finalScore = 100;
     if (finalScore < 0) finalScore = 0;
     
-    // CAPTIAL RULES
-    const data = getTradesData();
-    const availableCap = data.portfolio;
-    const maxPerItem = 150; // 30% of 500 max
-    
+    // DECISION RESTRICTIONS
     let verdict = 'SKIP';
     let recommendedUnits = 0;
     let riskLevel = 'High';
-    let flipType = 'FAST';
-    let timeSensitivity = 'Immediate';
+    let flipType = 'HOLD';
+    let timeSensitivity = 'Low';
+    let simulationConfidence = 'Low';
     
-    if (finalScore >= 80) { verdict = 'STRONG BUY'; recommendedUnits = 1; riskLevel = 'Low'; }
-    else if (finalScore >= 65) { verdict = 'BUY SMALL'; recommendedUnits = 1; riskLevel = 'Medium'; }
-    else if (finalScore >= 50) { verdict = 'WATCH'; recommendedUnits = 0; riskLevel = 'Medium'; timeSensitivity = 'Low'; }
-    
-    if (finalScore >= 90 && liquidity === 'High' && (totalCost * 2) <= maxPerItem) {
-        recommendedUnits = 2; 
+    // Base categorization before hard restrictions
+    if (finalScore >= 80) { verdict = 'STRONG BUY'; recommendedUnits = 1; riskLevel = 'Low'; flipType = 'FAST'; timeSensitivity = 'Immediate'; simulationConfidence = 'High'; }
+    else if (finalScore >= 65) { verdict = 'BUY SMALL'; recommendedUnits = 1; riskLevel = 'Medium'; timeSensitivity = 'Short'; simulationConfidence = 'Medium'; }
+    else if (finalScore >= 50) { verdict = 'WATCH'; recommendedUnits = 0; riskLevel = 'Medium'; }
+
+    // STRICT OVERRIDES
+    // STRONG BUY allowed ONLY if: Profit >= $25 AND Resale Confidence = HIGH AND Liquidity = HIGH or MEDIUM
+    if (verdict === 'STRONG BUY' && (estimatedProfit < 25 || resaleConfidence !== 'HIGH' || liquidity === 'Low')) {
+        verdict = 'BUY SMALL';
+        finalScore = Math.min(finalScore, 79);
+        simulationConfidence = 'Medium';
     }
     
-    if (categoryStrength === 'Strong' && liquidity === 'High') { flipType = 'FAST'; }
-    else { flipType = 'HOLD'; }
+    // BUY SMALL allowed ONLY if: Profit >= $10 AND Resale Confidence >= MEDIUM
+    if (verdict === 'BUY SMALL' && (estimatedProfit < 10 || resaleConfidence === 'LOW')) {
+        verdict = 'WATCH';
+        recommendedUnits = 0;
+        finalScore = Math.min(finalScore, 64);
+        simulationConfidence = 'Low';
+    }
+
+    // LOW Confidence block
+    if (resaleConfidence === 'LOW') {
+        if (verdict === 'STRONG BUY' || verdict === 'BUY SMALL') {
+            verdict = 'WATCH';
+            recommendedUnits = 0;
+            finalScore = Math.min(finalScore, 50);
+        }
+    }
+    
+    // CAPTIAL RULES
+    const data = getTradesData();
+    const availableCap = data.portfolio;
+    const maxPerItem = 150; 
+    
+    if (verdict === 'STRONG BUY' && liquidity === 'High' && (totalCost * 2) <= maxPerItem && estimatedProfit >= 30) {
+        recommendedUnits = 2; 
+    }
 
     // Enforce Budget
-    if (availableCap - (totalCost * recommendedUnits) < 100) { // Maintain 20% unused rule
+    if (availableCap - (totalCost * recommendedUnits) < 100) { 
         recommendedUnits = Math.floor((availableCap - 100) / totalCost);
-        if (recommendedUnits <= 0) {
+        if (recommendedUnits <= 0 && (verdict === 'STRONG BUY' || verdict === 'BUY SMALL')) {
             verdict = 'SKIP (Capital Limit Reached)';
             recommendedUnits = 0;
         }
@@ -136,7 +178,8 @@ function evaluateTrade(title, retailPrice, marketPrice, isLimited, isRestock, or
 
     return {
         brandStrength, categoryStrength, liquidity, resaleEvidence, expectedResale, estimatedProfit, totalCost,
-        discount, finalScore, verdict, recommendedUnits, tradeId, riskLevel, flipType, timeSensitivity, availableCap
+        discount, finalScore, verdict, recommendedUnits, tradeId, riskLevel, flipType, timeSensitivity, availableCap,
+        resaleConfidence, dataQuality, simulationConfidence
     };
 }
 

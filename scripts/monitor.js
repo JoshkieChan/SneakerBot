@@ -288,6 +288,15 @@ async function sendDiscordAlert(payload) {
 **Risk Level**: ${en.riskLevel}
 **Time Sensitivity**: ${en.timeSensitivity}
 
+**Validation Layer**:
+- Resale Confidence: ${en.resaleConfidence}
+- Data Quality: ${en.dataQuality}
+- Simulation Confidence: ${en.simulationConfidence}
+
+*Human Verification Required*:
+- Check real sales manually before buying
+- Confirm demand on resale platforms
+
 **Opportunity Score**: ${en.finalScore}/100
 
 **FINAL DECISION**:

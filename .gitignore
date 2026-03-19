@@ -2,5 +2,17 @@ node_modules
 .env
 monitor.log
 .DS_Store
-agent/rules/*.json
-node_modules
+# Data layer
+data/
+# Logs
+logs/
+# Config/Secrets (Global JSON guard)
+**/*.json
+!config/config.json
+!package.json
+!package-lock.json
+# Legacy
+legacy/
+# Specific secret files
+**/acquired-voice*.json
+**/service-account*.json

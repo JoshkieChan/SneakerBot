@@ -28,14 +28,17 @@ class IntelligenceAgent {
                 }
             }
 
-            // 2. Market Data Analysis (Phase 39: Realism & Liquidity)
+            // 2. Market Data Analysis (Phase 39/43: Realism & Modeling)
             const market = signal.market || {};
-            let resaleConfidence = signal.market.isEstimated ? 'ESTIMATED' : (market.hasSoldData ? 'HIGH' : 'LOW');
-            if (!market.hasListings && !market.hasSoldData) resaleConfidence = 'NONE';
+            let resaleConfidence = signal.market.isModelEstimated ? 'MODEL_ESTIMATED' : 
+                                   (signal.market.isEstimated ? 'ESTIMATED' : 
+                                   (market.hasSoldData ? 'HIGH' : 'LOW'));
+            
+            if (!market.hasListings && !market.hasSoldData && !signal.market.isModelEstimated) resaleConfidence = 'NONE';
             
             if (resaleConfidence === 'HIGH') {
                 score += 20;
-            } else if (resaleConfidence === 'LOW' || resaleConfidence === 'ESTIMATED') {
+            } else if (['LOW', 'ESTIMATED', 'MODEL_ESTIMATED'].includes(resaleConfidence)) {
                 score -= 10;
             }
 
@@ -81,6 +84,7 @@ class IntelligenceAgent {
 
             // Phase 39/42: Scoring Intelligence Caps
             if (resaleConfidence === 'NONE') score = Math.min(score, 60);
+            if (resaleConfidence === 'MODEL_ESTIMATED') score = Math.min(score, 60);
             if (resaleConfidence === 'ESTIMATED') score = Math.min(score, 65);
             if (resaleConfidence === 'LOW') score = Math.min(score, 70);
 

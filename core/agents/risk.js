@@ -13,10 +13,11 @@ class RiskAgent {
         const price = signal.product.price;
         const marketPrice = signal.market.price || price; 
         
-        // Phase 39: Real Profit Detection
+        // Phase 39/43: Real Profit Detection
         const platformFeePercent = this.config.PlatformFeePercent || 12;
         const estimatedShipping = this.config.EstimatedShipping || 10;
-        
+        const isModel = signal.market.isModelEstimated;
+
         const trueProfit = (marketPrice * (1 - platformFeePercent / 100)) - price - estimatedShipping;
         
         // Worst-Case Simulation
@@ -24,9 +25,11 @@ class RiskAgent {
         const adjustedFees = platformFeePercent + 2;
         const worstCaseProfit = (adjustedResale * (1 - adjustedFees / 100)) - price - estimatedShipping;
         
-        // Phase 39: Hard Profit Gates (Rule: Visibility is not profit)
-        if (worstCaseProfit < -10) {
-            console.log(`[RISK] KILL: Worst-case loss ($${worstCaseProfit.toFixed(2)}) below market floor.`);
+        // Phase 43: Adjusted Model Thresholds
+        const skipFloor = isModel ? -5 : -10;
+
+        if (worstCaseProfit < skipFloor) {
+            console.log(`[RISK] KILL: Worst-case loss ($${worstCaseProfit.toFixed(2)}) below ${isModel ? 'model' : 'market'} floor.`);
             signal.risk = { isSafe: false, trueProfit, worstCaseProfit, verdict: 'SKIP' };
             return signal;
         }
@@ -36,7 +39,7 @@ class RiskAgent {
             worstCaseProfit,
             riskLevel: worstCaseProfit < 0 ? 'HIGH' : (worstCaseProfit < 20 ? 'MEDIUM' : 'LOW'),
             isSafe: worstCaseProfit > 0,
-            simConfidence: signal.intelligence.resaleConfidence,
+            confidence: isModel ? 'MODEL_ESTIMATED' : (signal.intelligence.resaleConfidence || 'LOW'),
             tags: worstCaseProfit <= 0 ? ['LOW CONFIDENCE / BREAK-EVEN RISK'] : []
         };
 

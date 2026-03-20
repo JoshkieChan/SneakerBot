@@ -222,19 +222,52 @@ class Orchestrator {
                 return null;
             });
 
-            // Phase 39: Mark as Estimated if fetch failed
+            // Phase 43: Price Intelligence Engine (Fallback Simulation)
             if (!signal.market.price) {
-                signal.market.price = signal.product.price; // Fallback to retail for simulation
-                signal.market.isEstimated = true;
+                const retail = signal.product.price;
+                const titleLower = signal.product.title.toLowerCase();
+                
+                // 1. Category Multipliers
+                let multiplier = 1.15; // Default safe multiplier
+                if (titleLower.includes('shoe') || titleLower.includes('sneaker')) multiplier = 1.25;
+                else if (titleLower.includes('jacket') || titleLower.includes('hoodie')) multiplier = 1.20;
+                else if (titleLower.includes('tee') || titleLower.includes('shirt')) multiplier = 1.10;
+                else if (['bag', 'belt', 'accessory', 'hat'].some(c => titleLower.includes(c))) multiplier = 1.05;
+
+                // 2. Brand Boosts
+                let brandBoost = 0;
+                const tier1 = ['nike', 'jordan', 'supreme', 'travis', 'yeezy'];
+                const tier2 = ['stussy', 'kith', 'ald', 'palace'];
+                if (tier1.some(b => titleLower.includes(b))) brandBoost = 0.10;
+                else if (tier2.some(b => titleLower.includes(b))) brandBoost = 0.05;
+
+                // 3. Hype Keyword Boost
+                const eliteKeywords = ['collab', 'limited', 'unreleased', 'sample', 'travis', 'virgil'];
+                const hypeBoost = eliteKeywords.some(k => titleLower.includes(k)) ? 0.10 : 0;
+
+                // 4. Size Scarcity Boost
+                const isLargeSize = ['xl', 'xxl', '2xl'].some(s => titleLower.includes(` ${s} `) || titleLower.endsWith(` ${s}`));
+                const sizeBoost = isLargeSize ? 0.05 : 0;
+
+                // Final Model Calculation
+                const totalMultiplier = multiplier + brandBoost + hypeBoost + sizeBoost;
+                signal.market.price = retail * totalMultiplier;
+                signal.market.isModelEstimated = true;
+                signal.market.resaleConfidence = 'MODEL_ESTIMATED';
+
+                console.log(`[PRICE MODEL] ${signal.product.title.slice(0, 25)}... | Base: ${multiplier.toFixed(2)} | Brand: +${brandBoost.toFixed(2)} | Hype: +${hypeBoost.toFixed(2)} | Size: +${sizeBoost.toFixed(2)} | Final Est: $${signal.market.price.toFixed(2)}`);
             } else {
-                signal.market.isEstimated = false;
+                signal.market.isModelEstimated = false;
             }
 
-            // Phase 37: Data Quality Detection for Summary
+            // Phase 37/39: Data Quality Detection for Summary
             const hasSold = signal.market.hasSoldData;
             const hasListings = signal.market.hasListings;
             // Phase 39: Map correctly
-            if (hasSold) signal.market.isEstimated = false; 
+            if (hasSold) {
+                signal.market.resaleConfidence = 'HIGH';
+                signal.market.isModelEstimated = false;
+            }
             
             if (hasSold) this.cycleMetrics.dataStats.sold++;
             else if (hasListings) this.cycleMetrics.dataStats.listings++;

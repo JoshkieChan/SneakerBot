@@ -331,18 +331,22 @@ class Orchestrator {
     validateProductQuality(product) {
         const title = product.title.toLowerCase();
         
-        // 1. HARD BLOCKLIST (Phase 44/45)
-        const blocklist = ['bag', 'handbag', 'tote', 'clutch', 'belt bag', 'purse', 'dress', 'skirt', 'blouse', 'belt', 'wallet', 'sock', 'basic tee', 'underwear', 'engineered garments', 'studio nicholson'];
-        const isBlocked = blocklist.some(term => title.includes(term));
+        // 1. DYNAMIC BLOCKLIST (Phase 44/45/45.2)
+        const configBlocklist = (this.config.EliteNegativeKeywords || []).map(k => k.toLowerCase());
+        const hardBlocklist = ['bag', 'handbag', 'tote', 'clutch', 'belt bag', 'purse', 'dress', 'skirt', 'blouse', 'belt', 'wallet', 'sock', 'basic tee', 'underwear', 'engineered garments', 'studio nicholson'];
+        const fullBlocklist = [...new Set([...configBlocklist, ...hardBlocklist])];
+        
+        const isBlocked = fullBlocklist.some(term => title.includes(term));
         if (isBlocked) {
             console.log(`[FILTER] Skipped Category/Designer (Blocklist): ${product.title}`);
             return false;
         }
 
-        // 2. HARD LIQUIDITY WHITELIST (Phase 45)
-        const tier1 = ['nike', 'jordan', 'supreme', 'off-white', 'travis', 'yeezy'];
-        const tier2 = ['stussy', 'kith', 'bape', 'corteiz', 'denim tears', 'hellstar', 'palace'];
-        const tier3 = ['pokemon', 'pop mart', 'bearbrick', 'labubu', 'sonny angel'];
+        // 2. DYNAMIC LIQUIDITY WHITELIST (Phase 45/45.2)
+        const tiers = this.config.EliteKeywordTiers || {};
+        const tier1 = (tiers.Tier1_HighPriority?.keywords || []).map(k => k.toLowerCase());
+        const tier2 = (tiers.Tier2_Conditional?.keywords || []).map(k => k.toLowerCase());
+        const tier3 = (tiers.Tier3_Speculative?.keywords || []).map(k => k.toLowerCase());
         
         const isTier1 = tier1.some(b => title.includes(b));
         const isTier2 = tier2.some(b => title.includes(b));
@@ -367,15 +371,17 @@ class Orchestrator {
 
     calculateLiquidityScore(product) {
         const title = product.title.toLowerCase();
-        const tier1 = ['nike', 'jordan', 'supreme', 'off-white', 'travis', 'yeezy'];
-        const tier2 = ['stussy', 'kith', 'bape', 'corteiz', 'denim tears', 'hellstar', 'palace'];
-        const tier3 = ['pokemon', 'pop mart', 'bearbrick', 'labubu', 'sonny angel'];
+        const tiers = this.config.EliteKeywordTiers || {};
+        
+        const tier1 = (tiers.Tier1_HighPriority?.keywords || []).map(k => k.toLowerCase());
+        const tier2 = (tiers.Tier2_Conditional?.keywords || []).map(k => k.toLowerCase());
+        const tier3 = (tiers.Tier3_Speculative?.keywords || []).map(k => k.toLowerCase());
 
         if (tier1.some(b => title.includes(b))) return 95;
-        if (tier3.some(b => title.includes(b))) return 85; // Collectibles have high velocity
+        if (tier3.some(b => title.includes(b))) return 85; 
         if (tier2.some(b => title.includes(b))) return 80;
         
-        return 50; // Unknown/Designer (should have been filtered)
+        return 50; 
     }
 
     async runCycle() {

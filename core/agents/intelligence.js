@@ -42,9 +42,9 @@ class IntelligenceAgent {
                 score -= 10;
             }
 
-            // 3. Category & Alpha Filtering (Phase 42: Quality Control)
+            // 3. Category & Alpha Filtering (Phase 42/45.2: Quality Control)
             const titleLower = signal.product.title.toLowerCase();
-            const genericTerms = ['basic', 'tee', 'essentials', 'beanie'];
+            const genericTerms = (this.config.EliteNegativeKeywords || []).map(k => k.toLowerCase()).slice(0, 10); // Use top negative keywords
             const isGeneric = genericTerms.some(term => titleLower.includes(term));
             
             // Scarcity Boost: XL/XXL Outerwear

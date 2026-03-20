@@ -261,17 +261,29 @@ class Orchestrator {
                 signal.market.isModelEstimated = false;
             }
 
-            // Phase 46: Early Signal Detection (Pre-Market Edge)
+            // Phase 46/47: Early Signal Integrity Enforcer
+            const EARLY_WINDOW_HOURS = 6;
             const publishedAt = signal.product.published_at ? new Date(signal.product.published_at) : null;
-            const hoursSinceDrop = publishedAt ? (Date.now() - publishedAt) / (1000 * 60 * 60) : 999;
+            const hoursSinceDrop = (publishedAt && !isNaN(publishedAt)) ? (Date.now() - publishedAt) / (1000 * 60 * 60) : null;
             
-            // Flag as EARLY if drop < 6 hours OR price is modeled/missing
-            const isEarly = hoursSinceDrop <= 6 || signal.market.isModelEstimated;
+            let isEarly = false;
+            let earlyReason = "Standard Market";
+
+            if (hoursSinceDrop === null) {
+                earlyReason = "Unknown Age/No Timestamp";
+            } else if (hoursSinceDrop > EARLY_WINDOW_HOURS) {
+                earlyReason = `Too Old (${hoursSinceDrop.toFixed(1)}h)`;
+            } else {
+                isEarly = true;
+                earlyReason = `Valid Window (${hoursSinceDrop.toFixed(1)}h)`;
+            }
+
             signal.intelligence.earlySignal = isEarly;
             
-            if (isEarly) {
-                console.log(`[EARLY ENGINE] Pre-market detection for: ${signal.product.title} (Age: ${hoursSinceDrop.toFixed(1)}h | Modeled: ${signal.market.isModelEstimated})`);
-            }
+            console.log(`[EARLY ENGINE]
+- Product: ${signal.product.title}
+- Early: ${isEarly.toString().toUpperCase()}
+- Reason: ${earlyReason}`);
 
             // Phase 37/39/43: Data Quality Detection for Summary
             const hasSold = signal.market.hasSoldData;

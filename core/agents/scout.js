@@ -37,6 +37,7 @@ class ScoutAgent {
                 available: p.variants.some(v => v.available),
                 url: `https://${new URL(url).hostname}/products/${p.handle}`,
                 image: p.images[0]?.src,
+                published_at: p.published_at, // Phase 47: Critical for Early Signal Integrity
                 site: target.site
             }));
 

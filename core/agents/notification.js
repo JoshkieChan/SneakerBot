@@ -13,19 +13,8 @@ class NotificationAgent {
     async send(signal) {
         if (!this.client || !this.client.isReady()) return;
         
-        // Phase 28.1: Hardened Verdict Filter
-        const verdict = signal.execution?.verdict;
-        if (verdict !== 'STRONG BUY' && verdict !== 'BUY SMALL') {
-            return; // Silent discard for WATCH/SKIP/ERROR
-        }
-
-        // Phase 36: Alert Floor Removal (Unlock Flow)
+        const verdict = signal.execution?.verdict || 'WATCH';
         const score = signal.intelligence?.score || 0;
-        if (score < 50) {
-            console.log(`[NOTIFICATION] Suppressing alert: Score ${score} < 50`);
-            return;
-        }
-
         const channelId = process.env.DISCORD_CHANNEL_ID;
         if (!channelId) return;
 
@@ -36,42 +25,38 @@ class NotificationAgent {
             const en = { ...signal.intelligence, ...signal.risk, ...signal.execution };
             const prod = signal.product;
 
-            const isBuy = ['STRONG BUY', 'BUY SMALL'].includes(en.verdict);
-            const embedColor = en.verdict === 'STRONG BUY' ? 0x00FF00 : (en.verdict === 'WATCH' ? 0xFFD700 : 0xFF0000);
-            
-            const ticketHeader = isBuy ? '🎫 EXECUTION TICKET' : `🚨 ${en.verdict}`;
+            const embedColor = en.verdict === 'STRONG BUY' ? 0x00FF00 : (en.verdict === 'BUY SMALL' ? 0x0000FF : 0xFFD700);
+            const ticketHeader = ['STRONG BUY', 'BUY SMALL'].includes(en.verdict) ? '🎫 EXECUTION TICKET' : `🚨 ${en.verdict}`;
             
             const descriptionBlock = `
 **Item**: ${prod.title}
-**Brand**: ${prod.vendor || 'Unknown'}
-**Price**: $${prod.price.toFixed(2)}
+**Price**: $${prod.price.toFixed(2)} | **Est. Resale**: $${signal.market.price || 'N/A'}
 
-**Market Analysis**:
-- Expected Profit (Worst Case): $${en.worstCaseProfit ? en.worstCaseProfit.toFixed(2) : 'N/A'}
-- Risk Level: ${en.riskLevel}
-- Data Quality: ${en.resaleConfidence}
+**Financial Intelligence**:
+- **True Profit**: $${en.trueProfit ? en.trueProfit.toFixed(2) : 'N/A'}
+- **Worst-Case Profit**: $${en.worstCaseProfit ? en.worstCaseProfit.toFixed(2) : 'N/A'}
+- **Liquidity**: ${en.liquidity}
+- **Confidence**: ${en.resaleConfidence}
 
-**Intelligence**:
-- Opportunity Score: ${score}/100
-- Liquidity: ${en.liquidity}
-
-**RECOMMENDED ACTION**:
-- **${en.verdict}**
+**Verdict Analysis**:
+- **ACTION**: **${en.verdict}**
+- **Score**: ${score}/100
+- **Units**: ${en.units || 0}
 
 **Trade ID**: ${signal.tradeId || 'N/A'}
 ---
-*This ticket requires human approval before manual execution.*
+*Signal prioritized by Market Realism (Phase 39)*
             `;
 
             const embed = new EmbedBuilder()
                 .setTitle(`${ticketHeader}: ${prod.title}`)
-                .setURL(prod.link)
+                .setURL(prod.url || prod.link)
                 .setColor(embedColor)
                 .setDescription(descriptionBlock)
                 .setTimestamp();
 
             await channel.send({ embeds: [embed] });
-            console.log(`[NOTIFICATION] Alert sent for ${prod.title}`);
+            console.log(`[NOTIFICATION] Alert sent for ${prod.title} [${en.verdict}]`);
         } catch (error) {
             console.error(`[NOTIFICATION ERROR] ${error.message}`);
         }

@@ -11,32 +11,30 @@ class ExecutionAgent {
         console.log(`[EXECUTION] Deciding for: ${signal.product.title}...`);
         
         const score = signal.intelligence.score;
-        const isSafe = signal.risk.isSafe;
+        const liquidity = signal.intelligence.liquidity;
+        const confidence = signal.intelligence.resaleConfidence;
         const worstCaseProfit = signal.risk.worstCaseProfit;
         
-        // Phase 25: Failsafe Trade Guard (Profit Floor)
-        // Phase 36/37: High-Quality WATCH Filtering
-        if (worstCaseProfit <= 0) {
-            // Phase 37: Quality Gate for WATCH
-            if (worstCaseProfit < -10) {
-                console.log(`[EXECUTION] Skip: WATCH signal profit ($${worstCaseProfit.toFixed(2)}) below quality floor.`);
-                signal.execution = { verdict: 'SKIP', reason: 'LOW_QUALITY_WATCH' };
-                return signal;
-            }
-
-            console.log(`[EXECUTION GOVERNANCE] Downgrade: Worst-case profit ($${worstCaseProfit}) is non-positive.`);
-            signal.execution = { 
-                verdict: 'WATCH', 
-                reason: 'PROFIT_FLOOR_VIOLATION',
-                tags: ['LOW CONFIDENCE / BREAK-EVEN RISK']
-            };
-            return signal;
+        let verdict = 'SKIP';
+        
+        // Phase 39: Hard Profit Gates
+        if (worstCaseProfit >= 20 && liquidity === 'HIGH' && confidence !== 'ESTIMATED') {
+            verdict = 'STRONG BUY';
+        } else if (worstCaseProfit >= 5) {
+            verdict = 'BUY SMALL';
+        } else if (worstCaseProfit >= -10) {
+            verdict = 'WATCH';
         }
 
-        let verdict = 'SKIP';
-        if (isSafe && score >= 80) verdict = 'STRONG BUY';
-        else if (isSafe && score >= 65) verdict = 'BUY SMALL';
-        else if (score >= 50) verdict = 'WATCH';
+        // Phase 39: Force Downgrade for ESTIMATED
+        if (verdict === 'STRONG BUY' && confidence === 'ESTIMATED') {
+            verdict = 'BUY SMALL';
+        }
+
+        if (verdict === 'SKIP') {
+            signal.execution = { verdict, reason: 'PROFIT_THRESHOLD_FAIL' };
+            return signal;
+        }
 
         // Autonomy Gating & Capital Management
         const price = signal.product.price;

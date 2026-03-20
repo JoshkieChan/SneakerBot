@@ -28,29 +28,48 @@ class IntelligenceAgent {
                 }
             }
 
-            // 2. Market Data Analysis (Phase 37: Data Quality Detection)
+            // 2. Market Data Analysis (Phase 39: Realism & Liquidity)
             const market = signal.market || {};
-            let resaleConfidence = 'NONE';
+            let resaleConfidence = signal.market.isEstimated ? 'ESTIMATED' : (market.hasSoldData ? 'HIGH' : 'LOW');
+            if (!market.hasListings && !market.hasSoldData) resaleConfidence = 'NONE';
             
-            if (market.hasSoldData) {
-                resaleConfidence = 'HIGH';
+            if (resaleConfidence === 'HIGH') {
                 score += 20;
-            } else if (market.hasListings) {
-                resaleConfidence = 'LOW';
+            } else if (resaleConfidence === 'LOW' || resaleConfidence === 'ESTIMATED') {
                 score -= 10;
             }
 
-            // 3. Category & Alpha Filtering (Phase 37)
-            const genericTerms = ['basic', 'tee', 'socks', 'essentials', 'hoodie', 'beanie'];
+            // 3. Category & Alpha Filtering (Phase 39: Scarcity Boost)
             const titleLower = signal.product.title.toLowerCase();
+            const genericTerms = ['basic', 'tee', 'socks', 'essentials', 'beanie'];
             const isGeneric = genericTerms.some(term => titleLower.includes(term));
-            if (isGeneric && !matchedTier) {
-                console.log(`[INTELLIGENCE] Generic Item Penalty (-15) for ${signal.product.title}`);
+            
+            // Scarcity Boost: XL/XXL Outerwear
+            const isOuterwear = ['jacket', 'hoodie', 'outerwear', 'coat'].some(cat => titleLower.includes(cat));
+            const isScareSize = ['xl', 'xxl', '2xl'].some(s => titleLower.includes(s));
+            
+            if (isOuterwear && isScareSize) {
+                console.log(`[INTELLIGENCE] Scarcity Boost (+10) for ${signal.product.title}`);
+                score += 10;
+            } else if (isGeneric && !matchedTier) {
                 score -= 15;
             }
 
-            // Phase 37: Scoring Intelligence Boost (Caps)
+            // 4. Liquidity Simulation Engine (Phase 39)
+            let liquidity = 'LOW';
+            const tier1Brands = ['nike', 'jordan', 'supreme', 'travis', 'adidas', 'yeezy'];
+            const tier2Brands = ['stussy', 'kith', 'ald', 'aimé leon dore', 'palace'];
+            const brandMatch = titleLower.split(' ')[0]; // Simple brand extraction
+
+            if (tier1Brands.some(b => titleLower.includes(b)) || matchedTier === 'Tier1') {
+                liquidity = 'HIGH';
+            } else if (tier2Brands.some(b => titleLower.includes(b)) || matchedTier === 'Tier2') {
+                liquidity = 'MEDIUM';
+            }
+
+            // Phase 39: Scoring Intelligence Boost (Caps)
             if (resaleConfidence === 'NONE') score = Math.min(score, 60);
+            if (resaleConfidence === 'ESTIMATED') score = Math.min(score, 65);
             if (resaleConfidence === 'LOW') score = Math.min(score, 70);
 
             // Phase 31: Scavenger Mode Penalty (-15)
@@ -63,7 +82,7 @@ class IntelligenceAgent {
                 score: Math.max(0, Math.min(100, score)),
                 matchedTier,
                 resaleConfidence,
-                liquidity: resaleConfidence,
+                liquidity,
                 brandStrength: matchedTier ? 'HIGH' : 'MEDIUM'
             };
 

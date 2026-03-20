@@ -222,9 +222,20 @@ class Orchestrator {
                 return null;
             });
 
+            // Phase 39: Mark as Estimated if fetch failed
+            if (!signal.market.price) {
+                signal.market.price = signal.product.price; // Fallback to retail for simulation
+                signal.market.isEstimated = true;
+            } else {
+                signal.market.isEstimated = false;
+            }
+
             // Phase 37: Data Quality Detection for Summary
             const hasSold = signal.market.hasSoldData;
             const hasListings = signal.market.hasListings;
+            // Phase 39: Map correctly
+            if (hasSold) signal.market.isEstimated = false; 
+            
             if (hasSold) this.cycleMetrics.dataStats.sold++;
             else if (hasListings) this.cycleMetrics.dataStats.listings++;
 
@@ -242,6 +253,9 @@ class Orchestrator {
 
             const verdict = signal.execution.verdict;
             
+            // Phase 39: Profit Debug Loop
+            console.log(`[PROFIT DEBUG] ${signal.product.title.slice(0, 30)}... | Retail: $${signal.product.price} | Resale: $${signal.market.price || 'N/A'} | True: $${signal.risk.trueProfit?.toFixed(2)} | WorstCase: $${signal.risk.worstCaseProfit?.toFixed(2)} | Verdict: ${verdict}`);
+
             // Phase 36: Track for Logging Summary
             if (verdict === 'SKIP' || verdict === 'ERROR') {
                 this.cycleMetrics.topRejected.push(signal);
@@ -325,7 +339,7 @@ class Orchestrator {
             // Advance pointer for next cycle
             this.batchPointer = (start + this.batchSize >= allTargets.length) ? 0 : this.batchPointer + 1;
 
-            let allProducts = [];
+            let collectedProducts = [];
             for (const target of batch) {
                 // Phase 30: Site-level Failure Penalty (Skip if 2+ consecutive failures)
                 const failures = this.siteFailures.get(target.site) || 0;
@@ -388,12 +402,19 @@ class Orchestrator {
                 }
             }
 
-            // Phase 37: Alert Rate Control & Prioritization
-            // 1. Sort by score DESC
-            alertQueue.sort((a, b) => (b.intelligence?.score || 0) - (a.intelligence?.score || 0));
-            
-            // 2. Cap at 20 alerts per cycle
-            const activeAlerts = alertQueue.slice(0, 20);
+            // Phase 39: Prioritized Alert Output & Market Realism
+            // 1. Group by Verdict
+            const strongBuys = alertQueue.filter(s => s.execution.verdict === 'STRONG BUY').sort((a,b) => b.intelligence.score - a.intelligence.score);
+            const buySmalls = alertQueue.filter(s => s.execution.verdict === 'BUY SMALL').sort((a,b) => b.intelligence.score - a.intelligence.score);
+            const watches = alertQueue.filter(s => s.execution.verdict === 'WATCH').sort((a,b) => b.intelligence.score - a.intelligence.score);
+
+            // 2. Select prioritized signals (Max 20 total)
+            // Target: 2 Strong, 5 Buy Small, 13 Watch
+            const activeAlerts = [
+                ...strongBuys.slice(0, 2),
+                ...buySmalls.slice(0, 5),
+                ...watches.slice(0, 20 - Math.min(20, strongBuys.slice(0,2).length + buySmalls.slice(0,5).length))
+            ].slice(0, 20);
             
             for (const signal of activeAlerts) {
                 const signalKey = `${signal.product.title}-${signal.product.price}`;
@@ -406,9 +427,10 @@ class Orchestrator {
                 }
             }
 
-            // Prepare Top 5 Actionable for Heartbeat
+            // Prepare Top 5 Actionable (REAL) for Heartbeat (Phase 39)
             this.cycleMetrics.topActionable = alertQueue
-                .filter(s => s.risk?.worstCaseProfit >= -5)
+                .filter(s => s.risk?.worstCaseProfit >= 0 || (s.intelligence.liquidity === 'HIGH' && s.risk?.worstCaseProfit >= -5))
+                .sort((a, b) => (b.risk?.worstCaseProfit || 0) - (a.risk?.worstCaseProfit || 0))
                 .slice(0, 5);
 
             // Phase 36: Mandatory Output Policy (Self-Healing Flow)

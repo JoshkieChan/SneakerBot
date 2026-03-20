@@ -11,27 +11,32 @@ class RiskAgent {
         console.log(`[RISK] Assessing: ${signal.product.title}...`);
         
         const price = signal.product.price;
-        const marketPrice = signal.market.price || price; // Default to retail if no market data
+        const marketPrice = signal.market.price || price; 
         
-        // 1. Worst-Case Simulation
-        const haircut = marketPrice * 0.90; // 10% lower resale
-        const feeHike = (this.config.PlatformFeePercent || 12) + 2; // 2% higher fees
-        const shipping = this.config.EstimatedShipping || 12;
+        // Phase 39: Real Profit Detection
+        const platformFeePercent = this.config.PlatformFeePercent || 12;
+        const estimatedShipping = this.config.EstimatedShipping || 10;
         
-        const worstCaseProfit = (haircut * (1 - feeHike / 100)) - price - shipping;
+        const trueProfit = (marketPrice * (1 - platformFeePercent / 100)) - price - estimatedShipping;
         
-        // Phase 37: Early Loss Filter (Critical Noise Reduction)
-        if (worstCaseProfit < -15) {
-            console.log(`[RISK] Early Kill: Estimated loss ($${worstCaseProfit.toFixed(2)}) exceeds threshold.`);
-            signal.risk = { isSafe: false, worstCaseProfit, verdict: 'SKIP' };
+        // Worst-Case Simulation
+        const adjustedResale = marketPrice * 0.90;
+        const adjustedFees = platformFeePercent + 2;
+        const worstCaseProfit = (adjustedResale * (1 - adjustedFees / 100)) - price - estimatedShipping;
+        
+        // Phase 39: Hard Profit Gates (Rule: Visibility is not profit)
+        if (worstCaseProfit < -10) {
+            console.log(`[RISK] KILL: Worst-case loss ($${worstCaseProfit.toFixed(2)}) below market floor.`);
+            signal.risk = { isSafe: false, trueProfit, worstCaseProfit, verdict: 'SKIP' };
             return signal;
         }
 
         signal.risk = {
+            trueProfit,
             worstCaseProfit,
-            riskLevel: worstCaseProfit < 0 ? 'High' : (worstCaseProfit < 20 ? 'Medium' : 'Low'),
+            riskLevel: worstCaseProfit < 0 ? 'HIGH' : (worstCaseProfit < 20 ? 'MEDIUM' : 'LOW'),
             isSafe: worstCaseProfit > 0,
-            simConfidence: signal.market.price ? 'High' : 'Low',
+            simConfidence: signal.intelligence.resaleConfidence,
             tags: worstCaseProfit <= 0 ? ['LOW CONFIDENCE / BREAK-EVEN RISK'] : []
         };
 

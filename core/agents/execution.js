@@ -23,8 +23,8 @@ class ExecutionAgent {
 
         let verdict = 'SKIP';
         if (isSafe && score >= 85) verdict = 'STRONG BUY';
-        else if (isSafe && score >= 70) verdict = 'BUY SMALL';
-        else if (score >= 60) verdict = 'WATCH';
+        else if (isSafe && score >= 65) verdict = 'BUY SMALL';
+        else if (score >= 50) verdict = 'WATCH';
 
         // Autonomy Gating & Capital Management
         const price = signal.product.price;
@@ -35,8 +35,9 @@ class ExecutionAgent {
             verdict = 'WATCH';
         }
 
-        if (verdict === 'STRONG BUY' && signal.risk.simConfidence !== 'High') {
-            verdict = 'BUY SMALL'; // Downgrade if no sold data
+        // Phase 28: Allow Medium Confidence for BUY SMALL
+        if (verdict === 'STRONG BUY' && signal.risk?.resaleConfidence !== 'High') {
+            verdict = 'BUY SMALL'; 
         }
 
         signal.execution = {

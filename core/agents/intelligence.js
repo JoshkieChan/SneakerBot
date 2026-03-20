@@ -28,21 +28,44 @@ class IntelligenceAgent {
                 }
             }
 
-            // 2. Negative keyword check
+            // 2. Market Data Analysis (Phase 28 Adjustments)
+            const market = signal.market || {};
+            let resaleConfidence = 'Low';
+            
+            if (market.hasSoldData) {
+                resaleConfidence = 'High';
+                score += 20;
+            } else if (market.hasListings) {
+                // Phase 28: Reduced penalty from -30 to -15
+                resaleConfidence = 'Medium';
+                score -= 15;
+            }
+
+            // 3. Anti-Hype Filter (Phase 28: Downgraded Severity)
+            const hypeKeywords = ['travis', 'spiderman', 'jordan 1 high', 'off-white'];
+            const isHyped = hypeKeywords.some(hk => signal.product.title.toLowerCase().includes(hk));
+            if (isHyped) {
+                // Moderate penalty (-5) instead of high rejection
+                score -= 5;
+            }
+
+            // 4. Negative keyword check
             const negativeMatch = this.config.EliteNegativeKeywords && this.config.EliteNegativeKeywords.some(neg => {
                 const regex = new RegExp(`\\b${neg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
                 return regex.test(signal.product.title);
             });
-            if (negativeMatch) score -= 50;
+            // Phase 28: Adaptive Feedback (Soft Mode)
+            if (signal.intelligence?.softMode) {
+                score += 5;
+            }
 
-            // 3. Category/Brand analysis
             signal.intelligence = {
+                ...signal.intelligence,
                 score,
                 matchedTier,
-                matchedKeywords: [],
-                resaleConfidence: score >= 70 ? 'High' : (score >= 50 ? 'Medium' : 'Low'),
-                liquidity: 'Medium',
-                brandStrength: 'Medium'
+                resaleConfidence,
+                liquidity: market.hasSoldData ? 'High' : 'Medium',
+                brandStrength: matchedTier ? 'High' : 'Medium'
             };
 
             return signal;

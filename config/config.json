@@ -1,16 +1,17 @@
 {
   "MinAlertPrice": 25,
-  "CheckIntervalMinutes": 10,
+  "CheckIntervalMinutes": 20,
   "EstimatedShipping": 12,
   "PlatformFeePercent": 12,
   "MinProfitThreshold": 15,
   "StrongProfitThreshold": 25,
-  "MaxCapitalPerTradePercent": 0.3,
+  "MaxCapitalPerTradePercent": 30,
+  "TotalCapital": 1000,
   "MinRemainingCapitalPercent": 0.2,
   "RequireHighVelocity": true,
   "EliteKeywordTiers": {
     "Tier1_HighPriority": {
-      "weight": 10,
+      "weight": 20,
       "keywords": [
         "Travis Scott", "Supreme", "Box Logo", "Off-White", "Chrome Hearts",
         "Denim Tears", "Hellstar", "Union LA", "Fragment", "Sacai",

@@ -40,6 +40,9 @@ class Orchestrator {
         // Phase 27: Persistent Batch State
         this.batchPointer = 0;
         this.batchSize = 12; // Standard 10-15 range
+        // Phase 28: Signal Quality Feedback Loop
+        this.emptyCycleCount = 0;
+        this.softModeActive = false;
     }
 
     resetMetrics() {
@@ -48,14 +51,16 @@ class Orchestrator {
             signalsFound: 0,
             signalsProcessed: 0,
             decisions: { 'STRONG BUY': 0, 'BUY SMALL': 0, 'WATCH': 0, 'SKIP': 0 },
-            errors: []
+            transientErrors: 0,
+            criticalErrors: 0
         };
     }
 
     async sendHeartbeat(status = 'START') {
         const timestamp = new Date().toISOString();
         if (status === 'START') {
-            console.log(`\n[${timestamp}] --- CYCLE START (Batch: ${this.batchPointer}) ---`);
+            const modeLabel = this.softModeActive ? ' [SOFT MODE ACTIVE]' : '';
+            console.log(`\n[${timestamp}] --- CYCLE START (Batch: ${this.batchPointer})${modeLabel} ---`);
         } else {
             const m = this.cycleMetrics;
             console.log(`\n[${timestamp}] --- CYCLE REPORT ---`);
@@ -63,7 +68,9 @@ class Orchestrator {
             console.log(`- Signals Found: ${m.signalsFound}`);
             console.log(`- Signals Processed: ${m.signalsProcessed}`);
             console.log(`- STRONG BUY: ${m.decisions['STRONG BUY'] || 0} | BUY SMALL: ${m.decisions['BUY SMALL'] || 0}`);
-            console.log(`- Errors: ${m.errors.length}`);
+            console.log(`- WATCH: ${m.decisions['WATCH'] || 0}`);
+            console.log(`- TRANSIENT Errors: ${m.transientErrors}`);
+            console.log(`- CRITICAL Errors: ${m.criticalErrors}`);
             
             if (m.signalsFound === 0) console.log('No valid signals this cycle');
             console.log('----------------------------\n');
@@ -115,7 +122,7 @@ class Orchestrator {
             timestamp: new Date().toISOString(),
             product: rawProduct,
             market: { price: null }, 
-            intelligence: {},
+            intelligence: { softMode: this.softModeActive },
             risk: {},
             execution: {},
             logging: {},
@@ -127,8 +134,16 @@ class Orchestrator {
 
             // Limited 8s Market Data Timeout for VPS
             const marketPromise = getStockXPrice(browser, signal.product.title);
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 8000));
-            signal.market.price = await Promise.race([marketPromise, timeoutPromise]).catch(() => null);
+            const timeoutPromise = new Promise((_, reject) => reject(new Error('TRANSIENT_TIMEOUT')));
+            
+            // Phase 28: Categorized Timeout
+            signal.market.price = await Promise.race([
+                marketPromise, 
+                new Promise((_, reject) => setTimeout(() => reject(new Error('TRANSIENT_TIMEOUT')), 8000))
+            ]).catch(e => {
+                if (e.message.includes('TRANSIENT')) this.cycleMetrics.transientErrors++;
+                return null;
+            });
 
             signal = await this.intel.analyze(signal);
             signal = await this.risk.assess(signal);
@@ -139,8 +154,13 @@ class Orchestrator {
             this.cycleMetrics.decisions[signal.execution.verdict] = (this.cycleMetrics.decisions[signal.execution.verdict] || 0) + 1;
             return signal;
         } catch (error) {
-            this.cycleMetrics.errors.push(error.message);
-            await this.logger.logError(error, 'PIPELINE_FLOW');
+            const isTransient = error.message.includes('TRANSIENT') || error.message.includes('TIMEOUT');
+            if (isTransient) {
+                this.cycleMetrics.transientErrors++;
+            } else {
+                this.cycleMetrics.criticalErrors++;
+                await this.logger.logError(error, 'PIPELINE_FLOW');
+            }
             this.cycleMetrics.decisions['SKIP']++;
             return null;
         }
@@ -213,6 +233,32 @@ class Orchestrator {
                     await this.processProduct(product, browser);
                 }
             }
+
+            // Phase 28: Adaptive Feedback Loop Logic
+            const totalBuys = (this.cycleMetrics.decisions['STRONG BUY'] || 0) + (this.cycleMetrics.decisions['BUY SMALL'] || 0);
+            
+            if (totalBuys === 0) {
+                this.emptyCycleCount++;
+                if (this.emptyCycleCount >= 3 && !this.softModeActive) {
+                    console.log('🔄 [ADAPTIVE] 3 empty cycles detected. Entering SOFT MODE for 2 cycles.');
+                    this.softModeActive = true;
+                    this.softModeStartCycle = this.batchPointer; // Marker
+                }
+            } else {
+                this.emptyCycleCount = 0;
+                if (this.softModeActive) {
+                    console.log('✅ [ADAPTIVE] Signal found. Resetting SOFT MODE.');
+                    this.softModeActive = false;
+                }
+            }
+
+            // Auto-revert Soft Mode after 2 cycles
+            if (this.softModeActive && this.emptyCycleCount >= 5) {
+                console.log('🔄 [ADAPTIVE] Soft Mode duration reached (2 cycles). Reverting to Standard Strictness.');
+                this.softModeActive = false;
+                this.emptyCycleCount = 0;
+            }
+
         } finally {
             clearTimeout(cycleTimeout);
             await browser.close().catch(() => {});

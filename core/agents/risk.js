@@ -15,8 +15,8 @@ class RiskAgent {
         
         // 1. Worst-Case Simulation
         const haircut = marketPrice * 0.90; // 10% lower resale
-        const feeHike = this.config.MarketplaceFeePercent + 2; // 2% higher fees
-        const shipping = this.config.ShippingEstimate || 15;
+        const feeHike = (this.config.PlatformFeePercent || 12) + 2; // 2% higher fees
+        const shipping = this.config.EstimatedShipping || 12;
         
         const worstCaseProfit = (haircut * (1 - feeHike / 100)) - price - shipping;
         

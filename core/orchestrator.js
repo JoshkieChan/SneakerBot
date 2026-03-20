@@ -339,7 +339,7 @@ class Orchestrator {
             // Advance pointer for next cycle
             this.batchPointer = (start + this.batchSize >= allTargets.length) ? 0 : this.batchPointer + 1;
 
-            let collectedProducts = [];
+            let allProducts = [];
             for (const target of batch) {
                 // Phase 30: Site-level Failure Penalty (Skip if 2+ consecutive failures)
                 const failures = this.siteFailures.get(target.site) || 0;
@@ -390,10 +390,17 @@ class Orchestrator {
                 }
             }
 
-            this.cycleMetrics.signalsFound = allProducts.length;
+            // Phase 40: Pipeline Defensive Guard
+            const totalCollected = (allProducts || []).length;
+            console.log(`[PIPELINE DEBUG] Total Products Collected: ${totalCollected}`);
+            this.cycleMetrics.signalsFound = totalCollected;
+
+            if (totalCollected === 0) {
+                console.log('[PIPELINE] No products collected this cycle. (Graceful Continue)');
+            }
 
             // Sequential processing to avoid CPU spikes
-            for (const product of allProducts) {
+            for (const product of (allProducts || [])) {
                 if (product.available) {
                     const signal = await this.processProduct(product, browser);
                     if (signal && ['STRONG BUY', 'BUY SMALL', 'WATCH'].includes(signal.execution?.verdict)) {

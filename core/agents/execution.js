@@ -15,14 +15,19 @@ class ExecutionAgent {
         const worstCaseProfit = signal.risk.worstCaseProfit;
         
         // Phase 25: Failsafe Trade Guard (Profit Floor)
+        // Phase 36: Zero-Profit Relaxation (Convert to WATCH instead of SKIP)
         if (worstCaseProfit <= 0) {
-            console.log(`[EXECUTION GOVERNANCE] Force SKIP: Worst-case profit ($${worstCaseProfit}) is non-positive.`);
-            signal.execution = { verdict: 'SKIP', reason: 'PROFIT_FLOOR_VIOLATION' };
+            console.log(`[EXECUTION GOVERNANCE] Downgrade: Worst-case profit ($${worstCaseProfit}) is non-positive.`);
+            signal.execution = { 
+                verdict: 'WATCH', 
+                reason: 'PROFIT_FLOOR_VIOLATION',
+                tags: ['LOW CONFIDENCE / BREAK-EVEN RISK']
+            };
             return signal;
         }
 
         let verdict = 'SKIP';
-        if (isSafe && score >= 85) verdict = 'STRONG BUY';
+        if (isSafe && score >= 80) verdict = 'STRONG BUY';
         else if (isSafe && score >= 65) verdict = 'BUY SMALL';
         else if (score >= 50) verdict = 'WATCH';
 

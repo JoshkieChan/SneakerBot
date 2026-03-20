@@ -36,9 +36,9 @@ class IntelligenceAgent {
                 resaleConfidence = 'High';
                 score += 20;
             } else if (market.hasListings) {
-                // Phase 28: Reduced penalty from -30 to -15
-                resaleConfidence = 'Medium';
-                score -= 15;
+                // Phase 36: Reduced penalty (Listings-only)
+                resaleConfidence = 'Low';
+                score -= 10;
             }
 
             // 3. Anti-Hype Filter (Phase 28: Downgraded Severity)

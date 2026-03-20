@@ -98,7 +98,10 @@ class Orchestrator {
             signalsProcessed: 0,
             decisions: { 'STRONG BUY': 0, 'BUY SMALL': 0, 'WATCH': 0, 'SKIP': 0 },
             transientErrors: 0,
-            criticalErrors: 0
+            criticalErrors: 0,
+            topRejected: [],
+            topWatch: [],
+            dataStats: { sold: 0, listings: 0 }
         };
     }
 
@@ -119,7 +122,22 @@ class Orchestrator {
             console.log(`- CRITICAL Errors: ${m.criticalErrors}`);
             console.log(`- Alerts Sent: ${this.notificationCount}`);
             
-            if (m.signalsFound === 0) console.log('No valid signals this cycle');
+            if (m.dataStats) {
+                const total = m.signalsProcessed || 1;
+                console.log(`- Data Quality: Sold ${(m.dataStats.sold/total*100).toFixed(1)}% | Listings ${(m.dataStats.listings/total*100).toFixed(1)}%`);
+            }
+
+            if (m.topWatch && m.topWatch.length > 0) {
+                console.log('\n[TOP WATCH SIGNALS]');
+                m.topWatch.slice(0, 3).forEach(s => console.log(`- ${s.product.title} (Score: ${s.intelligence.score})`));
+            }
+
+            if (m.topRejected && m.topRejected.length > 0) {
+                console.log('\n[TOP REJECTED SIGNALS]');
+                m.topRejected.slice(0, 3).forEach(s => console.log(`- ${s.product.title}: ${s.execution?.reason || 'Unknown'}`));
+            }
+            
+            if (m.signalsFound === 0) console.log('\nNo valid signals this cycle');
             console.log('----------------------------\n');
         }
     }
@@ -186,6 +204,9 @@ class Orchestrator {
         try {
             this.validateSignal(signal);
 
+            if (rawProduct.soldCount > 0) this.cycleMetrics.dataStats.sold++;
+            if (rawProduct.listingCount > 0) this.cycleMetrics.dataStats.listings++;
+
             // Phase 33: Pass orchestrator for shutdown resilience
             const marketPromise = getStockXPrice(browser, signal.product.title, this);
             
@@ -198,18 +219,34 @@ class Orchestrator {
                 return null;
             });
 
-            signal = await this.intel.analyze(signal);
-            signal = await this.risk.assess(signal);
-            signal = await this.exec.decide(signal);
-            signal = await this.logger.persist(signal);
-            
-            // Phase 31: Hard 24-Hour Deduplication
+            // Phase 36: Guaranteed Agent Resilience
+            try {
+                signal = await this.intel.analyze(signal);
+                signal = await this.risk.assess(signal);
+                signal = await this.exec.decide(signal);
+                signal = await this.logger.persist(signal);
+            } catch (agentErr) {
+                console.error(`[ORCHESTRATOR] Agent Error (Transient): ${agentErr.message}`);
+                this.cycleMetrics.transientErrors++;
+                return null;
+            }
+
             const verdict = signal.execution.verdict;
-            if (['STRONG BUY', 'BUY SMALL'].includes(verdict) && this.notificationCount < 3) {
+            
+            // Phase 36: Track for Logging Summary
+            if (verdict === 'SKIP' || verdict === 'ERROR') {
+                this.cycleMetrics.topRejected.push(signal);
+            } else if (verdict === 'WATCH') {
+                this.cycleMetrics.topWatch.push(signal);
+            }
+
+            // Phase 31/36: Persistent Deduplication & Alerting
+            if (['STRONG BUY', 'BUY SMALL', 'WATCH'].includes(verdict)) {
                 const signalKey = `${signal.product.title}-${signal.product.price}`;
-                if (this.processedSignals.has(signalKey)) {
-                    console.log(`[ORCHESTRATOR] Deduplicating: Alert already sent for ${signalKey}`);
-                } else {
+                const alertedAt = this.processedSignals.get(signalKey);
+                
+                // Only alert if not already alerted within 24h
+                if (!alertedAt || alertedAt === 0) {
                     await this.notifier.send(signal);
                     this.processedSignals.set(signalKey, Date.now());
                     this.notificationCount++;
@@ -219,7 +256,11 @@ class Orchestrator {
             this.cycleMetrics.decisions[verdict] = (this.cycleMetrics.decisions[verdict] || 0) + 1;
             return signal;
         } catch (error) {
-            const isTransient = error.message.includes('TRANSIENT') || error.message.includes('TIMEOUT');
+            const isTransient = error.message.includes('TRANSIENT') || 
+                                error.message.includes('TIMEOUT') || 
+                                error.message.includes('Target closed') ||
+                                error.message.includes('Navigation');
+            
             if (isTransient) {
                 this.cycleMetrics.transientErrors++;
             } else {
@@ -335,6 +376,27 @@ class Orchestrator {
                 }
             }
 
+            // Phase 36: Mandatory Output Policy (Self-Healing Flow)
+            if (this.notificationCount === 0 && this.cycleMetrics.signalsProcessed > 50) {
+                console.log('⚠️ [PHASE 36] Zero-Output detected. Force-promoting Top 5 signals to WATCH.');
+                
+                // Combine and sort all processed signals by score
+                const candidates = [...this.cycleMetrics.topWatch, ...this.cycleMetrics.topRejected]
+                    .sort((a, b) => (b.intelligence?.score || 0) - (a.intelligence?.score || 0))
+                    .slice(0, 5);
+
+                for (const signal of candidates) {
+                    signal.execution.verdict = 'WATCH';
+                    signal.execution.reason = 'PHASE_36_FORCE_PROMOTE';
+                    
+                    const signalKey = `${signal.product.title}-${signal.product.price}`;
+                    await this.notifier.send(signal);
+                    this.processedSignals.set(signalKey, Date.now());
+                    this.notificationCount++;
+                    this.cycleMetrics.decisions['WATCH']++;
+                }
+            }
+
             // Phase 28: Adaptive Feedback Loop Logic
             const totalBuys = (this.cycleMetrics.decisions['STRONG BUY'] || 0) + (this.cycleMetrics.decisions['BUY SMALL'] || 0);
             
@@ -343,21 +405,10 @@ class Orchestrator {
                 if (this.emptyCycleCount >= 3 && !this.softModeActive) {
                     console.log('🔄 [ADAPTIVE] 3 empty cycles detected. Entering SOFT MODE for 2 cycles.');
                     this.softModeActive = true;
-                    this.softModeStartCycle = this.batchPointer; // Marker
                 }
             } else {
                 this.emptyCycleCount = 0;
-                if (this.softModeActive) {
-                    console.log('✅ [ADAPTIVE] Signal found. Resetting SOFT MODE.');
-                    this.softModeActive = false;
-                }
-            }
-
-            // Auto-revert Soft Mode after 2 cycles
-            if (this.softModeActive && this.emptyCycleCount >= 5) {
-                console.log('🔄 [ADAPTIVE] Soft Mode duration reached (2 cycles). Reverting to Standard Strictness.');
                 this.softModeActive = false;
-                this.emptyCycleCount = 0;
             }
 
         } finally {

@@ -19,10 +19,10 @@ class NotificationAgent {
             return; // Silent discard for WATCH/SKIP/ERROR
         }
 
-        // Phase 28.1: Global Alert Floor (Force 70 for Discord)
+        // Phase 36: Alert Floor Removal (Unlock Flow)
         const score = signal.intelligence?.score || 0;
-        if (score < 70) {
-            console.log(`[NOTIFICATION] Suppressing ${verdict} alert: Score ${score} < 70 (Discord Floor)`);
+        if (score < 50) {
+            console.log(`[NOTIFICATION] Suppressing alert: Score ${score} < 50`);
             return;
         }
 

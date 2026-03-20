@@ -24,7 +24,8 @@ class RiskAgent {
             worstCaseProfit,
             riskLevel: worstCaseProfit < 0 ? 'High' : (worstCaseProfit < 20 ? 'Medium' : 'Low'),
             isSafe: worstCaseProfit > 0,
-            simConfidence: signal.market.price ? 'High' : 'Low'
+            simConfidence: signal.market.price ? 'High' : 'Low',
+            tags: worstCaseProfit <= 0 ? ['LOW CONFIDENCE / BREAK-EVEN RISK'] : []
         };
 
         // 2. Capital Benchmarks

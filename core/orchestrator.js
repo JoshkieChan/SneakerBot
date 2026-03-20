@@ -103,6 +103,8 @@ class Orchestrator {
             topWatch: [],
             topActionable: [],
             earlySignalsInCycle: 0,
+            rejections: { time: 0, profit: 0, demand: 0, tier: 0, blocklist: 0 },
+            keywordTracker: {},
             dataStats: { sold: 0, listings: 0 }
         };
     }
@@ -128,6 +130,13 @@ class Orchestrator {
                 const total = m.signalsProcessed || 1;
                 console.log(`- Data Quality: Sold ${(m.dataStats.sold/total*100).toFixed(1)}% | Listings ${(m.dataStats.listings/total*100).toFixed(1)}%`);
             }
+
+            console.log('\n[REJECTION SUMMARY]');
+            console.log(`- Time Filter: ${m.rejections.time}`);
+            console.log(`- Profit Fail: ${m.rejections.profit}`);
+            console.log(`- No Demand: ${m.rejections.demand}`);
+            console.log(`- Tier Skipped: ${m.rejections.tier}`);
+            console.log(`- Blocklisted: ${m.rejections.blocklist}`);
 
             if (m.topActionable && m.topActionable.length > 0) {
                 console.log('\n[TOP 5 ACTIONABLE SIGNALS]');
@@ -514,39 +523,91 @@ class Orchestrator {
                 console.log('[PIPELINE] No products collected this cycle. (Graceful Continue)');
             }
 
+            // Phase 48: Demand Proxy (First Pass - Keyword Frequency)
+            for (const p of (allProducts || [])) {
+                if (!p.title) continue;
+                const terms = p.title.toLowerCase().split(' ');
+                terms.forEach(t => {
+                    if (t.length > 3) this.cycleMetrics.keywordTracker[t] = (this.cycleMetrics.keywordTracker[t] || 0) + 1;
+                });
+            }
+
             // Sequential processing to avoid CPU spikes
             for (const product of (allProducts || [])) {
                 if (product.available) {
-                    // Phase 44: Early Exit Quality Filter
+                    const title = product.title.toLowerCase();
+
+                    // Phase 48: Early Hard Filter (CPU Saver)
+                    const tiers = this.config.EliteKeywordTiers || {};
+                    const matchedTier = Object.entries(tiers).find(([tier, data]) => 
+                        data.keywords.some(k => title.includes(k.toLowerCase()))
+                    )?.[0];
+
+                    if (!matchedTier) {
+                        this.cycleMetrics.rejections.tier++;
+                        continue; // brand not in ANY tier
+                    }
+
+                    // Phase 44/48: Quality Filter (Blocklist)
                     if (!this.validateProductQuality(product)) {
-                        this.cycleMetrics.topRejected.push({ product, execution: { reason: 'QUALITY_FILTER_SKIP' } });
+                        this.cycleMetrics.rejections.blocklist++;
                         continue;
+                    }
+
+                    // Phase 48: Restock Detection
+                    const isRestock = this.checkRestock(product);
+
+                    // Phase 48: Conditional Tier Execution
+                    if (!isRestock) {
+                        if (matchedTier === 'Tier2_Conditional') {
+                            const isNew = title.includes('new') || title.includes('drop') || title.includes('release');
+                            const publishedAt = product.published_at ? new Date(product.published_at) : null;
+                            const hoursSinceDrop = publishedAt ? (Date.now() - publishedAt) / (1000 * 60 * 60) : 999;
+                            
+                            if (!isNew && hoursSinceDrop > 24) {
+                                this.cycleMetrics.rejections.tier++;
+                                continue; // Tier 2 must be new or contain keywords
+                            }
+                        }
+
+                        if (matchedTier === 'Tier3_Speculative') {
+                            // Handled inside processProduct: hard skip if no resale data
+                        }
                     }
 
                     // Phase 45: Liquidity Engine Gate
                     const liquidityScore = this.calculateLiquidityScore(product);
                     if (liquidityScore < 70) {
-                        console.log(`[LIQUIDITY ENGINE] FORCE SKIP: ${product.title} (Score: ${liquidityScore})`);
-                        this.cycleMetrics.topRejected.push({ product, execution: { reason: 'LOW_LIQUIDITY_SKIP' } });
+                        this.cycleMetrics.rejections.tier++;
                         continue;
                     }
 
                     const signal = await this.processProduct(product, browser);
-                    
+                    if (isRestock) {
+                        signal.intelligence.score += 20;
+                        signal.intelligence.tags = [...(signal.intelligence.tags || []), 'RESTOCK'];
+                    }                    
+                    // Phase 48: Demand Proxy Boost
+                    const demandMatches = Object.entries(this.cycleMetrics.keywordTracker).some(([k, count]) => title.includes(k) && count >= 3);
+                    if (demandMatches) {
+                        signal.intelligence.score += 10;
+                        signal.intelligence.demandBoost = true;
+                    }
+
                     // Phase 46: Early Signal Limit (Max 2 per cycle)
                     const isEarlyVerdict = signal?.execution?.verdict === 'EARLY BUY';
                     if (isEarlyVerdict) {
                         this.cycleMetrics.earlySignalsInCycle = (this.cycleMetrics.earlySignalsInCycle || 0) + 1;
                         if (this.cycleMetrics.earlySignalsInCycle > 2) {
-                            console.log(`[EARLY ENGINE] CYCLE LIMIT REACHED (2). Skipping Early Alpha: ${product.title}`);
                             continue;
                         }
                     }
 
                     if (signal && ['STRONG BUY', 'BUY SMALL', 'WATCH', 'EARLY WATCH', 'EARLY BUY'].includes(signal.execution?.verdict)) {
                         signal.intelligence.liquidityScore = liquidityScore;
-                        console.log(`[LIQUIDITY ENGINE] ACCEPTED: ${product.title} (Score: ${liquidityScore})`);
                         alertQueue.push(signal);
+                    } else if (signal) {
+                        this.cycleMetrics.rejections.profit++;
                     }
                 }
             }
@@ -556,7 +617,25 @@ class Orchestrator {
             console.log(`[ALERT DEBUG] Total Alerts Prepared: ${alertCount}`);
 
             if (alertCount === 0) {
-                console.log('[ALERT PIPELINE] No valid alerts this cycle. (Graceful Skip)');
+                console.log('[ALERT PIPELINE] No actionable signals. Checking for fallback WATCH alerts...');
+                // Phase 48: Fallback Guarantee (Top 3 WATCH >= 50)
+                const fallbackWatches = (alertQueue || [])
+                    .filter(s => s.intelligence.score >= 50)
+                    .sort((a,b) => b.intelligence.score - a.intelligence.score)
+                    .slice(0, 3);
+                
+                if (fallbackWatches.length > 0) {
+                    for (const signal of fallbackWatches) {
+                        try {
+                            await this.notifier.send(signal);
+                            this.notificationCount++;
+                        } catch (e) {
+                            console.error(`[NOTIFICATION FAIL] ${e.message}`);
+                        }
+                    }
+                } else {
+                    console.log('[ALERT PIPELINE] No valid signals found (even fallbacks).');
+                }
             } else {
                 // Phase 39/42/45: Prioritized Alert Output (Liquidity-First)
                 const safeQueue = Array.isArray(alertQueue) ? alertQueue : [];
@@ -574,23 +653,27 @@ class Orchestrator {
                 const earlyWatches = sortedQueue.filter(s => s.execution.verdict === 'EARLY WATCH');
                 const watches = sortedQueue.filter(s => s.execution.verdict === 'WATCH');
 
-                // Phase 42/46: Select prioritized signals (Max 20 total)
+                // Phase 42/46/48: Select prioritized signals (Max 10 total)
                 const activeAlerts = [
                     ...strongBuys.slice(0, 2),
                     ...earlyBuys.slice(0, 2),
-                    ...buySmalls.slice(0, 5),
-                    ...earlyWatches.slice(0, 5),
-                    ...watches.slice(0, 20 - Math.min(20, strongBuys.slice(0,2).length + earlyBuys.slice(0,2).length + buySmalls.slice(0,5).length + earlyWatches.slice(0,5).length))
-                ].slice(0, 20);
+                    ...buySmalls.slice(0, 4),
+                    ...earlyWatches.slice(0, 2),
+                    ...watches.slice(0, 10 - Math.min(10, strongBuys.slice(0,2).length + earlyBuys.slice(0,2).length + buySmalls.slice(0,4).length + earlyWatches.slice(0,2).length))
+                ].slice(0, 10);
                 
                 for (const signal of activeAlerts) {
                     const signalKey = `${signal.product.title}-${signal.product.price}`;
                     const alertedAt = this.processedSignals.get(signalKey);
                     
                     if (!alertedAt || alertedAt === 0) {
-                        await this.notifier.send(signal);
-                        this.processedSignals.set(signalKey, Date.now());
-                        this.notificationCount++;
+                        try {
+                            await this.notifier.send(signal);
+                            this.processedSignals.set(signalKey, Date.now());
+                            this.notificationCount++;
+                        } catch (e) {
+                            console.error(`[NOTIFICATION FAIL] ${e.message}`);
+                        }
                     }
                 }
             }

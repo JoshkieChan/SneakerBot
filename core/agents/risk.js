@@ -25,12 +25,13 @@ class RiskAgent {
         const adjustedFees = platformFeePercent + 2;
         const worstCaseProfit = (adjustedResale * (1 - adjustedFees / 100)) - price - estimatedShipping;
         
-        // Phase 43/46: Adjusted Model Thresholds
+        // Phase 43/46/48: Adjusted Model Thresholds
         const isEarly = signal.intelligence.earlySignal;
-        const skipFloor = isEarly ? -999 : (isModel ? -5 : -10);
+        const isTier1 = signal.intelligence.matchedTier === 'Tier1';
+        const skipFloor = isEarly ? -999 : (isTier1 ? -10 : (isModel ? -5 : -5));
 
         if (worstCaseProfit < skipFloor) {
-            console.log(`[RISK] KILL: Worst-case loss ($${worstCaseProfit.toFixed(2)}) below ${isModel ? 'model' : 'market'} floor.`);
+            console.log(`[RISK] KILL: Worst-case loss ($${worstCaseProfit.toFixed(2)}) below ${isTier1 ? 'Tier1' : (isModel ? 'model' : 'market')} floor.`);
             signal.risk = { isSafe: false, trueProfit, worstCaseProfit, verdict: 'SKIP' };
             return signal;
         }
@@ -39,9 +40,9 @@ class RiskAgent {
             trueProfit,
             worstCaseProfit,
             riskLevel: isEarly ? 'HIGH (PRE-MARKET)' : (worstCaseProfit < 0 ? 'HIGH' : (worstCaseProfit < 20 ? 'MEDIUM' : 'LOW')),
-            isSafe: isEarly || worstCaseProfit > 0,
+            isSafe: isEarly || worstCaseProfit >= (isTier1 && signal.intelligence.liquidity === 'HIGH' ? 0 : 0),
             confidence: isEarly ? 'EARLY_SIGNAL' : (isModel ? 'MODEL_ESTIMATED' : (signal.intelligence.resaleConfidence || 'LOW')),
-            tags: isEarly ? ['PRE-MARKET PRICE DISCOVERY'] : (worstCaseProfit <= 0 ? ['LOW CONFIDENCE / BREAK-EVEN RISK'] : [])
+            tags: isEarly ? ['PRE-MARKET PRICE DISCOVERY'] : (worstCaseProfit < 0 ? ['LOW CONFIDENCE / BREAK-EVEN RISK'] : [])
         };
 
         // 2. Capital Benchmarks

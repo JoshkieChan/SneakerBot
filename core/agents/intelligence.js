@@ -66,6 +66,29 @@ class IntelligenceAgent {
             const isTier2 = tier2Brands.some(b => titleLower.includes(b)) || matchedTier === 'Tier2';
             const isCollab = signal.product.title.includes(' x ') || signal.product.title.includes(' / ');
 
+            // Phase 48: Time Decay Filter (High Impact, Low Cost)
+            const publishedAt = signal.product.published_at ? new Date(signal.product.published_at) : null;
+            const hoursSinceDrop = (publishedAt && !isNaN(publishedAt.getTime())) ? (Date.now() - publishedAt.getTime()) / (1000 * 60 * 60) : -1;
+
+            if (hoursSinceDrop > 120) {
+                console.log(`[EARLY ENGINE] HARD SKIP: Product age (${hoursSinceDrop.toFixed(1)}h) exceeds 120h threshold.`);
+                signal.rejectionReason = 'TIME_DECAY_SKIP';
+                return null; 
+            } else if (hoursSinceDrop > 48) {
+                console.log(`[EARLY ENGINE] PENALTY (-25): Product age (${hoursSinceDrop.toFixed(1)}h) exceeds 48h window.`);
+                score -= 25;
+            }
+
+            // Phase 48: Collab + Hype Detection Boost
+            const hasCollab = titleLower.includes(' x ') || titleLower.includes('&');
+            let tier1Matches = 0;
+            tier1Brands.forEach(b => { if (titleLower.includes(b)) tier1Matches++; });
+
+            if (hasCollab || tier1Matches >= 2) {
+                console.log(`[HYPE ENGINE] COLLAB/COMBO BOOST (+15) for ${signal.product.title}`);
+                score += 15;
+            }
+
             // Phase 46: Early Alpha Boost
             if (signal.intelligence.earlySignal && (isTier1 || isTier2) && matchedTier) {
                 console.log(`[EARLY ENGINE] Alpha Boost (+20) for ${signal.product.title}`);

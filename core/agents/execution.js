@@ -18,18 +18,19 @@ class ExecutionAgent {
         let verdict = 'SKIP';
         let reason = 'PROFIT_THRESHOLD_FAIL';
         
-        // Phase 39/42/43/45/46: Hard Profit Gates & Early Alpha
+        // Phase 39/42/43/45/46/48: Optimized Pivot Thresholds
         const isModel = confidence === 'MODEL_ESTIMATED';
         const isEarly = signal.intelligence.earlySignal;
+        const isTier1 = signal.intelligence.matchedTier === 'Tier1';
         
         if (isEarly && liquidity === 'HIGH' && signal.intelligence.matchedTier) {
             verdict = 'EARLY BUY';
             reason = 'PRE_MARKET_ALPHA';
-        } else if (worstCaseProfit >= 20 && liquidity === 'HIGH' && confidence !== 'ESTIMATED' && !isModel) {
+        } else if (worstCaseProfit >= 15 && (liquidity === 'HIGH' || isTier1)) {
             verdict = 'STRONG BUY';
-        } else if (worstCaseProfit >= (isModel ? 10 : 8)) {
+        } else if (worstCaseProfit >= 5 || (isTier1 && worstCaseProfit >= 0 && liquidity === 'HIGH')) {
             verdict = 'BUY SMALL';
-        } else if (worstCaseProfit >= (isModel ? -5 : -5)) {
+        } else if (worstCaseProfit >= -5) {
             verdict = 'WATCH';
         }
 
@@ -37,7 +38,7 @@ class ExecutionAgent {
         let units = 0;
         if (verdict === 'STRONG BUY') units = 2;
         if (verdict === 'BUY SMALL') units = 1;
-        if (verdict === 'EARLY BUY') units = 1; // Limit early buys to 1 unit
+        if (verdict === 'EARLY BUY') units = 1;
 
         // Phase 42: Early Alpha Detection (Potential before market moves)
         if (verdict === 'SKIP' && worstCaseProfit >= -10) {

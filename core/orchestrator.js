@@ -102,6 +102,7 @@ class Orchestrator {
             topRejected: [],
             topWatch: [],
             topActionable: [],
+            earlySignalsInCycle: 0,
             dataStats: { sold: 0, listings: 0 }
         };
     }
@@ -260,7 +261,19 @@ class Orchestrator {
                 signal.market.isModelEstimated = false;
             }
 
-            // Phase 37/39: Data Quality Detection for Summary
+            // Phase 46: Early Signal Detection (Pre-Market Edge)
+            const publishedAt = signal.product.published_at ? new Date(signal.product.published_at) : null;
+            const hoursSinceDrop = publishedAt ? (Date.now() - publishedAt) / (1000 * 60 * 60) : 999;
+            
+            // Flag as EARLY if drop < 6 hours OR price is modeled/missing
+            const isEarly = hoursSinceDrop <= 6 || signal.market.isModelEstimated;
+            signal.intelligence.earlySignal = isEarly;
+            
+            if (isEarly) {
+                console.log(`[EARLY ENGINE] Pre-market detection for: ${signal.product.title} (Age: ${hoursSinceDrop.toFixed(1)}h | Modeled: ${signal.market.isModelEstimated})`);
+            }
+
+            // Phase 37/39/43: Data Quality Detection for Summary
             const hasSold = signal.market.hasSoldData;
             const hasListings = signal.market.hasListings;
             // Phase 39: Map correctly
@@ -507,7 +520,18 @@ class Orchestrator {
                     }
 
                     const signal = await this.processProduct(product, browser);
-                    if (signal && ['STRONG BUY', 'BUY SMALL', 'WATCH', 'EARLY WATCH'].includes(signal.execution?.verdict)) {
+                    
+                    // Phase 46: Early Signal Limit (Max 2 per cycle)
+                    const isEarlyVerdict = signal?.execution?.verdict === 'EARLY BUY';
+                    if (isEarlyVerdict) {
+                        this.cycleMetrics.earlySignalsInCycle = (this.cycleMetrics.earlySignalsInCycle || 0) + 1;
+                        if (this.cycleMetrics.earlySignalsInCycle > 2) {
+                            console.log(`[EARLY ENGINE] CYCLE LIMIT REACHED (2). Skipping Early Alpha: ${product.title}`);
+                            continue;
+                        }
+                    }
+
+                    if (signal && ['STRONG BUY', 'BUY SMALL', 'WATCH', 'EARLY WATCH', 'EARLY BUY'].includes(signal.execution?.verdict)) {
                         signal.intelligence.liquidityScore = liquidityScore;
                         console.log(`[LIQUIDITY ENGINE] ACCEPTED: ${product.title} (Score: ${liquidityScore})`);
                         alertQueue.push(signal);
@@ -533,16 +557,18 @@ class Orchestrator {
                 });
 
                 const strongBuys = sortedQueue.filter(s => s.execution.verdict === 'STRONG BUY');
+                const earlyBuys = sortedQueue.filter(s => s.execution.verdict === 'EARLY BUY');
                 const buySmalls = sortedQueue.filter(s => s.execution.verdict === 'BUY SMALL');
                 const earlyWatches = sortedQueue.filter(s => s.execution.verdict === 'EARLY WATCH');
                 const watches = sortedQueue.filter(s => s.execution.verdict === 'WATCH');
 
-                // Phase 42: Select prioritized signals (Max 20 total, Early Watch capped at 5)
+                // Phase 42/46: Select prioritized signals (Max 20 total)
                 const activeAlerts = [
                     ...strongBuys.slice(0, 2),
+                    ...earlyBuys.slice(0, 2),
                     ...buySmalls.slice(0, 5),
                     ...earlyWatches.slice(0, 5),
-                    ...watches.slice(0, 20 - Math.min(20, strongBuys.slice(0,2).length + buySmalls.slice(0,5).length + earlyWatches.slice(0,5).length))
+                    ...watches.slice(0, 20 - Math.min(20, strongBuys.slice(0,2).length + earlyBuys.slice(0,2).length + buySmalls.slice(0,5).length + earlyWatches.slice(0,5).length))
                 ].slice(0, 20);
                 
                 for (const signal of activeAlerts) {

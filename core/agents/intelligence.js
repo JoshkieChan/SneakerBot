@@ -57,7 +57,7 @@ class IntelligenceAgent {
                 score -= 15;
             }
 
-            // 4. Hype & Liquidity Activation (Phase 42)
+            // 4. Hype & Liquidity Activation (Phase 42/46)
             let liquidity = 'LOW';
             const tier1Brands = ['nike', 'jordan', 'supreme', 'travis', 'adidas', 'yeezy'];
             const tier2Brands = ['stussy', 'kith', 'ald', 'aimé leon dore', 'palace', 'engineered garments'];
@@ -65,6 +65,12 @@ class IntelligenceAgent {
             const isTier1 = tier1Brands.some(b => titleLower.includes(b)) || matchedTier === 'Tier1';
             const isTier2 = tier2Brands.some(b => titleLower.includes(b)) || matchedTier === 'Tier2';
             const isCollab = signal.product.title.includes(' x ') || signal.product.title.includes(' / ');
+
+            // Phase 46: Early Alpha Boost
+            if (signal.intelligence.earlySignal && (isTier1 || isTier2) && matchedTier) {
+                console.log(`[EARLY ENGINE] Alpha Boost (+20) for ${signal.product.title}`);
+                score += 20;
+            }
 
             if (isTier1 || (isTier2 && isCollab)) {
                 liquidity = 'HIGH';
@@ -74,11 +80,12 @@ class IntelligenceAgent {
                 score += 5;
             }
 
-            // Phase 39/42: Scoring Intelligence Caps
-            if (resaleConfidence === 'NONE') score = Math.min(score, 60);
-            if (resaleConfidence === 'MODEL_ESTIMATED') score = Math.min(score, 60);
-            if (resaleConfidence === 'ESTIMATED') score = Math.min(score, 65);
-            if (resaleConfidence === 'LOW') score = Math.min(score, 70);
+            // Phase 39/42/46: Scoring Intelligence Caps
+            const isEarly = signal.intelligence.earlySignal;
+            if (resaleConfidence === 'NONE' && !isEarly) score = Math.min(score, 60);
+            if (resaleConfidence === 'MODEL_ESTIMATED' && !isEarly) score = Math.min(score, 60);
+            if (resaleConfidence === 'ESTIMATED' && !isEarly) score = Math.min(score, 65);
+            if (resaleConfidence === 'LOW' && !isEarly) score = Math.min(score, 70);
 
             // Phase 31: Scavenger Mode Penalty (-15)
             if (signal.product.isFallback) {

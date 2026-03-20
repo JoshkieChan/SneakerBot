@@ -50,12 +50,32 @@ ${isEarly ? `✨ **Early Insight**: ${en.earlyReason || 'Potential before market
 *Signal prioritized by Market Edge (Phase 42)*
             `;
 
+            const isEarlySignal = signal.intelligence?.earlySignal;
+            const verdictTitle = isEarlySignal ? `⚡ EARLY BUY ⚡` : (en.verdict === 'STRONG BUY' ? '🔥 STRONG BUY 🔥' : (en.verdict === 'BUY SMALL' ? '✅ BUY SMALL' : (en.verdict === 'EARLY WATCH' ? '👀 EARLY WATCH' : '⏳ WATCH')));
+            
+            let headerColorInt = en.verdict === 'STRONG BUY' ? 0x00FF00 : (en.verdict === 'EARLY WATCH' ? 0x00FFFF : (en.verdict === 'BUY SMALL' ? 0x0000FF : 0xFFD700));
+            if (isEarlySignal) headerColorInt = 0xF1C40F; // Gold for Early Alpha
+
             const embed = new EmbedBuilder()
-                .setTitle(`${ticketHeader}: ${prod.title}`)
+                .setTitle(`${verdictTitle}: ${prod.title}`)
                 .setURL(prod.url || prod.link)
-                .setColor(embedColor)
-                .setDescription(descriptionBlock)
+                .setColor(headerColorInt)
+                .addFields(
+                    { name: '💰 Retail', value: `$${prod.price.toFixed(2)}`, inline: true },
+                    { name: '📈 Est. Resale', value: `$${(signal.market.price || 0).toFixed(2)}`, inline: true },
+                    { name: '💵 Worst-Case Profit', value: isEarlySignal ? 'N/A (Pre-Market)' : `$${(en.worstCaseProfit || 0).toFixed(2)}`, inline: true },
+                    { name: '📊 Liquidity', value: en.liquidity || 'MEDIUM', inline: true },
+                    { name: '🎯 Score', value: `${score}/100`, inline: true },
+                    { name: '🛡️ Confidence', value: en.confidence || 'MODEL', inline: true }
+                )
+                .setFooter({ text: `SneakerBot 2.0 | ${prod.site}` })
                 .setTimestamp();
+
+            if (isEarlySignal) {
+                embed.setDescription(`**[EARLY SIGNAL]** Primary detection within 6 hours of drop.\n**Strategy:** Buy before price discovery occurs. High risk, extreme alpha potential.`);
+            } else {
+                embed.setDescription(descriptionBlock);
+            }
 
             await channel.send({ embeds: [embed] });
             console.log(`[NOTIFICATION] Alert sent for ${prod.title} [${en.verdict}]`);

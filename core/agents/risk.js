@@ -25,8 +25,9 @@ class RiskAgent {
         const adjustedFees = platformFeePercent + 2;
         const worstCaseProfit = (adjustedResale * (1 - adjustedFees / 100)) - price - estimatedShipping;
         
-        // Phase 43: Adjusted Model Thresholds
-        const skipFloor = isModel ? -5 : -10;
+        // Phase 43/46: Adjusted Model Thresholds
+        const isEarly = signal.intelligence.earlySignal;
+        const skipFloor = isEarly ? -999 : (isModel ? -5 : -10);
 
         if (worstCaseProfit < skipFloor) {
             console.log(`[RISK] KILL: Worst-case loss ($${worstCaseProfit.toFixed(2)}) below ${isModel ? 'model' : 'market'} floor.`);
@@ -37,10 +38,10 @@ class RiskAgent {
         signal.risk = {
             trueProfit,
             worstCaseProfit,
-            riskLevel: worstCaseProfit < 0 ? 'HIGH' : (worstCaseProfit < 20 ? 'MEDIUM' : 'LOW'),
-            isSafe: worstCaseProfit > 0,
-            confidence: isModel ? 'MODEL_ESTIMATED' : (signal.intelligence.resaleConfidence || 'LOW'),
-            tags: worstCaseProfit <= 0 ? ['LOW CONFIDENCE / BREAK-EVEN RISK'] : []
+            riskLevel: isEarly ? 'HIGH (PRE-MARKET)' : (worstCaseProfit < 0 ? 'HIGH' : (worstCaseProfit < 20 ? 'MEDIUM' : 'LOW')),
+            isSafe: isEarly || worstCaseProfit > 0,
+            confidence: isEarly ? 'EARLY_SIGNAL' : (isModel ? 'MODEL_ESTIMATED' : (signal.intelligence.resaleConfidence || 'LOW')),
+            tags: isEarly ? ['PRE-MARKET PRICE DISCOVERY'] : (worstCaseProfit <= 0 ? ['LOW CONFIDENCE / BREAK-EVEN RISK'] : [])
         };
 
         // 2. Capital Benchmarks

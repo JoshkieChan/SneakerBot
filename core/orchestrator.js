@@ -46,6 +46,21 @@ class Orchestrator {
         this.emptyCycleCount = 0;
         this.siteFailures = new Map(); // Phase 30: Track consecutive failures
         this.isShuttingDown = false; // Phase 33: Global Shutdown Flag
+        this.processedSignals = new Map(); // Phase 31: Persistent Deduplication (24h)
+        this.notificationCount = 0;
+
+        // Phase 35: Standardized Metrics Initialization
+        this.metrics = {
+            signalsFound: 0,
+            signalsProcessed: 0,
+            strongBuy: 0,
+            buySmall: 0,
+            watch: 0,
+            errors: {
+                transient: 0,
+                critical: 0
+            }
+        };
 
         // Phase 33: Global Process Resilience
         process.on('unhandledRejection', (reason, promise) => {
@@ -59,13 +74,21 @@ class Orchestrator {
     }
 
     resetMetrics() {
+        // Phase 35: Defensive Metrics Guard & Debug Logging
+        console.log(`[DEBUG] Metrics State: ${JSON.stringify(this.metrics || {})}`);
+        if (!this.metrics) {
+            this.metrics = { signalsFound: 0, signalsProcessed: 0, strongBuy: 0, buySmall: 0, watch: 0, errors: { transient: 0, critical: 0 }};
+        }
+        this.metrics.errors = this.metrics.errors || { transient: 0, critical: 0 };
+
         this.notificationCount = 0;
         
         // Phase 31: 24-Hour Persistent Deduplication Cleanup
         const now = Date.now();
-        for (const [key, timestamp] of this.processedSignals.entries()) {
+        const signals = this.processedSignals || new Map();
+        for (const [key, timestamp] of (signals.entries ? signals.entries() : [])) {
             if (now - timestamp > 24 * 60 * 60 * 1000) {
-                this.processedSignals.delete(key);
+                signals.delete(key);
             }
         }
 

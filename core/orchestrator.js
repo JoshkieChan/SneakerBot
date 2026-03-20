@@ -43,9 +43,13 @@ class Orchestrator {
         // Phase 28: Signal Quality Feedback Loop
         this.emptyCycleCount = 0;
         this.softModeActive = false;
+        this.processedSignals = new Set();
+        this.notificationCount = 0;
     }
 
     resetMetrics() {
+        this.processedSignals.clear();
+        this.notificationCount = 0;
         this.cycleMetrics = {
             startTime: new Date(),
             signalsFound: 0,
@@ -71,6 +75,7 @@ class Orchestrator {
             console.log(`- WATCH: ${m.decisions['WATCH'] || 0}`);
             console.log(`- TRANSIENT Errors: ${m.transientErrors}`);
             console.log(`- CRITICAL Errors: ${m.criticalErrors}`);
+            console.log(`- Alerts Sent: ${this.notificationCount}`);
             
             if (m.signalsFound === 0) console.log('No valid signals this cycle');
             console.log('----------------------------\n');
@@ -113,6 +118,11 @@ class Orchestrator {
     }
 
     async processProduct(rawProduct, browser) {
+        // Phase 28.2: Hard Deduplication
+        const signalKey = `${rawProduct.title}-${rawProduct.price}`;
+        if (this.processedSignals.has(signalKey)) return null;
+        this.processedSignals.add(signalKey);
+
         this.cycleMetrics.signalsProcessed++;
         
         let signal = {
@@ -134,7 +144,6 @@ class Orchestrator {
 
             // Limited 8s Market Data Timeout for VPS
             const marketPromise = getStockXPrice(browser, signal.product.title);
-            const timeoutPromise = new Promise((_, reject) => reject(new Error('TRANSIENT_TIMEOUT')));
             
             // Phase 28: Categorized Timeout
             signal.market.price = await Promise.race([
@@ -149,9 +158,15 @@ class Orchestrator {
             signal = await this.risk.assess(signal);
             signal = await this.exec.decide(signal);
             signal = await this.logger.persist(signal);
-            await this.notifier.send(signal);
             
-            this.cycleMetrics.decisions[signal.execution.verdict] = (this.cycleMetrics.decisions[signal.execution.verdict] || 0) + 1;
+            // Phase 28.2: Cap at 3 notifications per cycle to eliminate spam
+            const verdict = signal.execution.verdict;
+            if (['STRONG BUY', 'BUY SMALL'].includes(verdict) && this.notificationCount < 3) {
+                await this.notifier.send(signal);
+                this.notificationCount++;
+            }
+            
+            this.cycleMetrics.decisions[verdict] = (this.cycleMetrics.decisions[verdict] || 0) + 1;
             return signal;
         } catch (error) {
             const isTransient = error.message.includes('TRANSIENT') || error.message.includes('TIMEOUT');

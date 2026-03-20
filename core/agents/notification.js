@@ -13,16 +13,16 @@ class NotificationAgent {
     async send(signal) {
         if (!this.client || !this.client.isReady()) return;
         
-        // Phase 28: Direct Verdict Filter (No Alert Spam for WATCH)
+        // Phase 28.1: Hardened Verdict Filter
         const verdict = signal.execution?.verdict;
-        if (!['STRONG BUY', 'BUY SMALL'].includes(verdict)) {
-            console.log(`[NOTIFICATION] Ignoring ${verdict || 'SKIP'}: Not an Execution Signal.`);
-            return;
+        if (verdict !== 'STRONG BUY' && verdict !== 'BUY SMALL') {
+            return; // Silent discard for WATCH/SKIP/ERROR
         }
 
-        const score = signal.intelligence.score;
-        if (score < (this.config.MinAlertScore || 65)) {
-            console.log(`[NOTIFICATION] Skipping: Score (${score}) below alert threshold.`);
+        // Phase 28.1: Global Alert Floor (Force 70 for Discord)
+        const score = signal.intelligence?.score || 0;
+        if (score < 70) {
+            console.log(`[NOTIFICATION] Suppressing ${verdict} alert: Score ${score} < 70 (Discord Floor)`);
             return;
         }
 

@@ -236,7 +236,7 @@ class Orchestrator {
                         await page.close();
                     }
                 } catch (e) {
-                    this.cycleMetrics.errors.push(`SCOUT_FAILED_${target.site}`);
+                    this.cycleMetrics.transientErrors++;
                 }
             }
 

@@ -340,6 +340,7 @@ class Orchestrator {
             this.batchPointer = (start + this.batchSize >= allTargets.length) ? 0 : this.batchPointer + 1;
 
             let allProducts = [];
+            let alertQueue = [];
             for (const target of batch) {
                 // Phase 30: Site-level Failure Penalty (Skip if 2+ consecutive failures)
                 const failures = this.siteFailures.get(target.site) || 0;
@@ -409,28 +410,35 @@ class Orchestrator {
                 }
             }
 
-            // Phase 39: Prioritized Alert Output & Market Realism
-            // 1. Group by Verdict
-            const strongBuys = alertQueue.filter(s => s.execution.verdict === 'STRONG BUY').sort((a,b) => b.intelligence.score - a.intelligence.score);
-            const buySmalls = alertQueue.filter(s => s.execution.verdict === 'BUY SMALL').sort((a,b) => b.intelligence.score - a.intelligence.score);
-            const watches = alertQueue.filter(s => s.execution.verdict === 'WATCH').sort((a,b) => b.intelligence.score - a.intelligence.score);
+            // Phase 41: Alert Pipeline Defensive Guard
+            const alertCount = (alertQueue || []).length;
+            console.log(`[ALERT DEBUG] Total Alerts Prepared: ${alertCount}`);
 
-            // 2. Select prioritized signals (Max 20 total)
-            // Target: 2 Strong, 5 Buy Small, 13 Watch
-            const activeAlerts = [
-                ...strongBuys.slice(0, 2),
-                ...buySmalls.slice(0, 5),
-                ...watches.slice(0, 20 - Math.min(20, strongBuys.slice(0,2).length + buySmalls.slice(0,5).length))
-            ].slice(0, 20);
-            
-            for (const signal of activeAlerts) {
-                const signalKey = `${signal.product.title}-${signal.product.price}`;
-                const alertedAt = this.processedSignals.get(signalKey);
+            if (alertCount === 0) {
+                console.log('[ALERT PIPELINE] No valid alerts this cycle. (Graceful Skip)');
+            } else {
+                // Phase 39: Prioritized Alert Output (Phase 41: Safe Access)
+                const safeQueue = Array.isArray(alertQueue) ? alertQueue : [];
+                const strongBuys = safeQueue.filter(s => s.execution.verdict === 'STRONG BUY').sort((a,b) => b.intelligence.score - a.intelligence.score);
+                const buySmalls = safeQueue.filter(s => s.execution.verdict === 'BUY SMALL').sort((a,b) => b.intelligence.score - a.intelligence.score);
+                const watches = safeQueue.filter(s => s.execution.verdict === 'WATCH').sort((a,b) => b.intelligence.score - a.intelligence.score);
+
+                // 2. Select prioritized signals (Max 20 total)
+                const activeAlerts = [
+                    ...strongBuys.slice(0, 2),
+                    ...buySmalls.slice(0, 5),
+                    ...watches.slice(0, 20 - Math.min(20, strongBuys.slice(0,2).length + buySmalls.slice(0,5).length))
+                ].slice(0, 20);
                 
-                if (!alertedAt || alertedAt === 0) {
-                    await this.notifier.send(signal);
-                    this.processedSignals.set(signalKey, Date.now());
-                    this.notificationCount++;
+                for (const signal of activeAlerts) {
+                    const signalKey = `${signal.product.title}-${signal.product.price}`;
+                    const alertedAt = this.processedSignals.get(signalKey);
+                    
+                    if (!alertedAt || alertedAt === 0) {
+                        await this.notifier.send(signal);
+                        this.processedSignals.set(signalKey, Date.now());
+                        this.notificationCount++;
+                    }
                 }
             }
 

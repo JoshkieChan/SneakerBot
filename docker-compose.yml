@@ -1,7 +1,7 @@
 services:
-  sneakerbot-pro:
+  sneakerbot-ultimate:
     build: .
-    container_name: sneakerbot-pro
+    container_name: sneakerbot-ultimate
     restart: always
     env_file:
       - .env

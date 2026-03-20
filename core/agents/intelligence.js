@@ -39,35 +39,47 @@ class IntelligenceAgent {
                 score -= 10;
             }
 
-            // 3. Category & Alpha Filtering (Phase 39: Scarcity Boost)
+            // 3. Category & Alpha Filtering (Phase 42: Quality Control)
             const titleLower = signal.product.title.toLowerCase();
             const genericTerms = ['basic', 'tee', 'socks', 'essentials', 'beanie'];
             const isGeneric = genericTerms.some(term => titleLower.includes(term));
             
+            // Phase 42: Quality Penalties
+            const junkCategories = ['bag', 'handbag', 'tote', 'clutch', 'belt bag', 'purse'];
+            const isJunk = junkCategories.some(cat => titleLower.includes(cat));
+            if (isJunk) {
+                console.log(`[INTELLIGENCE] Quality Penalty (-20) for ${signal.product.title}`);
+                score -= 20;
+            }
+
             // Scarcity Boost: XL/XXL Outerwear
             const isOuterwear = ['jacket', 'hoodie', 'outerwear', 'coat'].some(cat => titleLower.includes(cat));
             const isScareSize = ['xl', 'xxl', '2xl'].some(s => titleLower.includes(s));
             
             if (isOuterwear && isScareSize) {
-                console.log(`[INTELLIGENCE] Scarcity Boost (+10) for ${signal.product.title}`);
                 score += 10;
             } else if (isGeneric && !matchedTier) {
                 score -= 15;
             }
 
-            // 4. Liquidity Simulation Engine (Phase 39)
+            // 4. Hype & Liquidity Activation (Phase 42)
             let liquidity = 'LOW';
             const tier1Brands = ['nike', 'jordan', 'supreme', 'travis', 'adidas', 'yeezy'];
-            const tier2Brands = ['stussy', 'kith', 'ald', 'aimé leon dore', 'palace'];
-            const brandMatch = titleLower.split(' ')[0]; // Simple brand extraction
+            const tier2Brands = ['stussy', 'kith', 'ald', 'aimé leon dore', 'palace', 'engineered garments'];
+            
+            const isTier1 = tier1Brands.some(b => titleLower.includes(b)) || matchedTier === 'Tier1';
+            const isTier2 = tier2Brands.some(b => titleLower.includes(b)) || matchedTier === 'Tier2';
+            const isCollab = signal.product.title.includes(' x ') || signal.product.title.includes(' / ');
 
-            if (tier1Brands.some(b => titleLower.includes(b)) || matchedTier === 'Tier1') {
+            if (isTier1 || (isTier2 && isCollab)) {
                 liquidity = 'HIGH';
-            } else if (tier2Brands.some(b => titleLower.includes(b)) || matchedTier === 'Tier2') {
+                score += 15; // Hype Boost
+            } else if (isTier2) {
                 liquidity = 'MEDIUM';
+                score += 5;
             }
 
-            // Phase 39: Scoring Intelligence Boost (Caps)
+            // Phase 39/42: Scoring Intelligence Caps
             if (resaleConfidence === 'NONE') score = Math.min(score, 60);
             if (resaleConfidence === 'ESTIMATED') score = Math.min(score, 65);
             if (resaleConfidence === 'LOW') score = Math.min(score, 70);

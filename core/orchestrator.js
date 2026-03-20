@@ -404,7 +404,7 @@ class Orchestrator {
             for (const product of (allProducts || [])) {
                 if (product.available) {
                     const signal = await this.processProduct(product, browser);
-                    if (signal && ['STRONG BUY', 'BUY SMALL', 'WATCH'].includes(signal.execution?.verdict)) {
+                    if (signal && ['STRONG BUY', 'BUY SMALL', 'WATCH', 'EARLY WATCH'].includes(signal.execution?.verdict)) {
                         alertQueue.push(signal);
                     }
                 }
@@ -417,17 +417,19 @@ class Orchestrator {
             if (alertCount === 0) {
                 console.log('[ALERT PIPELINE] No valid alerts this cycle. (Graceful Skip)');
             } else {
-                // Phase 39: Prioritized Alert Output (Phase 41: Safe Access)
+                // Phase 39/42: Prioritized Alert Output & Early Alpha
                 const safeQueue = Array.isArray(alertQueue) ? alertQueue : [];
                 const strongBuys = safeQueue.filter(s => s.execution.verdict === 'STRONG BUY').sort((a,b) => b.intelligence.score - a.intelligence.score);
                 const buySmalls = safeQueue.filter(s => s.execution.verdict === 'BUY SMALL').sort((a,b) => b.intelligence.score - a.intelligence.score);
+                const earlyWatches = safeQueue.filter(s => s.execution.verdict === 'EARLY WATCH').sort((a,b) => b.intelligence.score - a.intelligence.score);
                 const watches = safeQueue.filter(s => s.execution.verdict === 'WATCH').sort((a,b) => b.intelligence.score - a.intelligence.score);
 
-                // 2. Select prioritized signals (Max 20 total)
+                // Phase 42: Select prioritized signals (Max 20 total, Early Watch capped at 5)
                 const activeAlerts = [
                     ...strongBuys.slice(0, 2),
                     ...buySmalls.slice(0, 5),
-                    ...watches.slice(0, 20 - Math.min(20, strongBuys.slice(0,2).length + buySmalls.slice(0,5).length))
+                    ...earlyWatches.slice(0, 5),
+                    ...watches.slice(0, 20 - Math.min(20, strongBuys.slice(0,2).length + buySmalls.slice(0,5).length + earlyWatches.slice(0,5).length))
                 ].slice(0, 20);
                 
                 for (const signal of activeAlerts) {
@@ -442,32 +444,11 @@ class Orchestrator {
                 }
             }
 
-            // Prepare Top 5 Actionable (REAL) for Heartbeat (Phase 39)
+            // Phase 42: Refined Top 5 Actionable (No neutral junk)
             this.cycleMetrics.topActionable = alertQueue
-                .filter(s => s.risk?.worstCaseProfit >= 0 || (s.intelligence.liquidity === 'HIGH' && s.risk?.worstCaseProfit >= -5))
+                .filter(s => s.execution.verdict !== 'WATCH' || s.risk?.worstCaseProfit >= 0)
                 .sort((a, b) => (b.risk?.worstCaseProfit || 0) - (a.risk?.worstCaseProfit || 0))
                 .slice(0, 5);
-
-            // Phase 36: Mandatory Output Policy (Self-Healing Flow)
-            if (this.notificationCount === 0 && this.cycleMetrics.signalsProcessed > 50) {
-                console.log('⚠️ [PHASE 36] Zero-Output detected. Force-promoting Top 5 signals to WATCH.');
-                
-                // Combine and sort all processed signals by score
-                const candidates = [...this.cycleMetrics.topWatch, ...this.cycleMetrics.topRejected]
-                    .sort((a, b) => (b.intelligence?.score || 0) - (a.intelligence?.score || 0))
-                    .slice(0, 5);
-
-                for (const signal of candidates) {
-                    signal.execution.verdict = 'WATCH';
-                    signal.execution.reason = 'PHASE_36_FORCE_PROMOTE';
-                    
-                    const signalKey = `${signal.product.title}-${signal.product.price}`;
-                    await this.notifier.send(signal);
-                    this.processedSignals.set(signalKey, Date.now());
-                    this.notificationCount++;
-                    this.cycleMetrics.decisions['WATCH']++;
-                }
-            }
 
             // Phase 28: Adaptive Feedback Loop Logic
             const totalBuys = (this.cycleMetrics.decisions['STRONG BUY'] || 0) + (this.cycleMetrics.decisions['BUY SMALL'] || 0);

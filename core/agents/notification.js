@@ -25,13 +25,15 @@ class NotificationAgent {
             const en = { ...signal.intelligence, ...signal.risk, ...signal.execution };
             const prod = signal.product;
 
-            const embedColor = en.verdict === 'STRONG BUY' ? 0x00FF00 : (en.verdict === 'BUY SMALL' ? 0x0000FF : 0xFFD700);
-            const ticketHeader = ['STRONG BUY', 'BUY SMALL'].includes(en.verdict) ? '🎫 EXECUTION TICKET' : `🚨 ${en.verdict}`;
+            const embedColor = en.verdict === 'STRONG BUY' ? 0x00FF00 : (en.verdict === 'EARLY WATCH' ? 0x00FFFF : (en.verdict === 'BUY SMALL' ? 0x0000FF : 0xFFD700));
+            const isEarly = en.verdict === 'EARLY WATCH';
+            const ticketHeader = isEarly ? '🛰️ [EARLY SIGNAL]' : (['STRONG BUY', 'BUY SMALL'].includes(en.verdict) ? '🎫 EXECUTION TICKET' : `🚨 ${en.verdict}`);
             
             const descriptionBlock = `
 **Item**: ${prod.title}
 **Price**: $${prod.price.toFixed(2)} | **Est. Resale**: $${signal.market.price || 'N/A'}
 
+${isEarly ? `✨ **Early Insight**: ${en.earlyReason || 'Potential before market moves'}\n` : ''}
 **Financial Intelligence**:
 - **True Profit**: $${en.trueProfit ? en.trueProfit.toFixed(2) : 'N/A'}
 - **Worst-Case Profit**: $${en.worstCaseProfit ? en.worstCaseProfit.toFixed(2) : 'N/A'}
@@ -45,7 +47,7 @@ class NotificationAgent {
 
 **Trade ID**: ${signal.tradeId || 'N/A'}
 ---
-*Signal prioritized by Market Realism (Phase 39)*
+*Signal prioritized by Market Edge (Phase 42)*
             `;
 
             const embed = new EmbedBuilder()

@@ -16,8 +16,9 @@ class ExecutionAgent {
         const worstCaseProfit = signal.risk.worstCaseProfit;
         
         let verdict = 'SKIP';
+        let reason = 'PROFIT_THRESHOLD_FAIL';
         
-        // Phase 39: Hard Profit Gates
+        // Phase 39/42: Hard Profit Gates & Early Alpha
         if (worstCaseProfit >= 20 && liquidity === 'HIGH' && confidence !== 'ESTIMATED') {
             verdict = 'STRONG BUY';
         } else if (worstCaseProfit >= 5) {
@@ -26,15 +27,31 @@ class ExecutionAgent {
             verdict = 'WATCH';
         }
 
+        // Phase 42: Early Alpha Detection (Potential before market moves)
+        if (verdict === 'SKIP' && worstCaseProfit >= -10) {
+            const isSneaker = signal.product.title.toLowerCase().includes('shoe') || signal.product.title.toLowerCase().includes('sneaker');
+            const isOuterwear = ['jacket', 'hoodie', 'outerwear'].some(c => signal.product.title.toLowerCase().includes(c));
+            const isHypeSize = ['m', 'l', 'xl', 'xxl'].some(s => signal.product.title.toLowerCase().includes(` ${s} `) || signal.product.title.toLowerCase().endsWith(` ${s}`));
+            const isHypeBrand = liquidity === 'HIGH';
+
+            if (isHypeBrand && (isSneaker || isOuterwear) && signal.product.price >= 80) {
+                verdict = 'EARLY WATCH';
+                reason = 'HYPE_ALPHA_POTENTIAL';
+                signal.execution.earlyReason = isCollab ? 'Elite Collaboration detected' : 'High-demand brand/category match';
+            }
+        }
+
         // Phase 39: Force Downgrade for ESTIMATED
         if (verdict === 'STRONG BUY' && confidence === 'ESTIMATED') {
             verdict = 'BUY SMALL';
         }
 
         if (verdict === 'SKIP') {
-            signal.execution = { verdict, reason: 'PROFIT_THRESHOLD_FAIL' };
+            signal.execution = { verdict, reason };
             return signal;
         }
+
+        signal.execution = { verdict, reason: 'VERDICT_REACHED' };
 
         // Autonomy Gating & Capital Management
         const price = signal.product.price;

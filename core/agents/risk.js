@@ -20,6 +20,13 @@ class RiskAgent {
         
         const worstCaseProfit = (haircut * (1 - feeHike / 100)) - price - shipping;
         
+        // Phase 37: Early Loss Filter (Critical Noise Reduction)
+        if (worstCaseProfit < -15) {
+            console.log(`[RISK] Early Kill: Estimated loss ($${worstCaseProfit.toFixed(2)}) exceeds threshold.`);
+            signal.risk = { isSafe: false, worstCaseProfit, verdict: 'SKIP' };
+            return signal;
+        }
+
         signal.risk = {
             worstCaseProfit,
             riskLevel: worstCaseProfit < 0 ? 'High' : (worstCaseProfit < 20 ? 'Medium' : 'Low'),

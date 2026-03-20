@@ -15,8 +15,15 @@ class ExecutionAgent {
         const worstCaseProfit = signal.risk.worstCaseProfit;
         
         // Phase 25: Failsafe Trade Guard (Profit Floor)
-        // Phase 36: Zero-Profit Relaxation (Convert to WATCH instead of SKIP)
+        // Phase 36/37: High-Quality WATCH Filtering
         if (worstCaseProfit <= 0) {
+            // Phase 37: Quality Gate for WATCH
+            if (worstCaseProfit < -10) {
+                console.log(`[EXECUTION] Skip: WATCH signal profit ($${worstCaseProfit.toFixed(2)}) below quality floor.`);
+                signal.execution = { verdict: 'SKIP', reason: 'LOW_QUALITY_WATCH' };
+                return signal;
+            }
+
             console.log(`[EXECUTION GOVERNANCE] Downgrade: Worst-case profit ($${worstCaseProfit}) is non-positive.`);
             signal.execution = { 
                 verdict: 'WATCH', 

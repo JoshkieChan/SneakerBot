@@ -101,6 +101,7 @@ class Orchestrator {
             criticalErrors: 0,
             topRejected: [],
             topWatch: [],
+            topActionable: [],
             dataStats: { sold: 0, listings: 0 }
         };
     }
@@ -127,9 +128,12 @@ class Orchestrator {
                 console.log(`- Data Quality: Sold ${(m.dataStats.sold/total*100).toFixed(1)}% | Listings ${(m.dataStats.listings/total*100).toFixed(1)}%`);
             }
 
-            if (m.topWatch && m.topWatch.length > 0) {
-                console.log('\n[TOP WATCH SIGNALS]');
-                m.topWatch.slice(0, 3).forEach(s => console.log(`- ${s.product.title} (Score: ${s.intelligence.score})`));
+            if (m.topActionable && m.topActionable.length > 0) {
+                console.log('\n[TOP 5 ACTIONABLE SIGNALS]');
+                m.topActionable.slice(0, 5).forEach(s => {
+                    const profit = s.risk?.worstCaseProfit || 0;
+                    console.log(`- ${s.product.title} | Score: ${s.intelligence.score} | Est. Profit: $${profit.toFixed(2)}`);
+                });
             }
 
             if (m.topRejected && m.topRejected.length > 0) {
@@ -178,13 +182,15 @@ class Orchestrator {
     }
 
     async processProduct(rawProduct, browser) {
-        // Phase 28.2: Hard Deduplication (Cycle-Level & Persistent)
+        // Phase 1: Data Validity Gate (Phase 37)
+        const price = rawProduct.price;
+        const hasRetail = price && !isNaN(price) && price > 0;
+        if (!hasRetail) return null;
+
         const signalKey = `${rawProduct.title}-${rawProduct.price}`;
         if (this.processedSignals.has(signalKey)) return null;
         
-        // Mark as 'seen' for this session/day with a 0 timestamp (not yet alerted)
         this.processedSignals.set(signalKey, 0); 
-
         this.cycleMetrics.signalsProcessed++;
         
         let signal = {
@@ -204,9 +210,6 @@ class Orchestrator {
         try {
             this.validateSignal(signal);
 
-            if (rawProduct.soldCount > 0) this.cycleMetrics.dataStats.sold++;
-            if (rawProduct.listingCount > 0) this.cycleMetrics.dataStats.listings++;
-
             // Phase 33: Pass orchestrator for shutdown resilience
             const marketPromise = getStockXPrice(browser, signal.product.title, this);
             
@@ -218,6 +221,12 @@ class Orchestrator {
                 if (e.message.includes('TRANSIENT')) this.cycleMetrics.transientErrors++;
                 return null;
             });
+
+            // Phase 37: Data Quality Detection for Summary
+            const hasSold = signal.market.hasSoldData;
+            const hasListings = signal.market.hasListings;
+            if (hasSold) this.cycleMetrics.dataStats.sold++;
+            else if (hasListings) this.cycleMetrics.dataStats.listings++;
 
             // Phase 36: Guaranteed Agent Resilience
             try {
@@ -372,9 +381,35 @@ class Orchestrator {
             // Sequential processing to avoid CPU spikes
             for (const product of allProducts) {
                 if (product.available) {
-                    await this.processProduct(product, browser);
+                    const signal = await this.processProduct(product, browser);
+                    if (signal && ['STRONG BUY', 'BUY SMALL', 'WATCH'].includes(signal.execution?.verdict)) {
+                        alertQueue.push(signal);
+                    }
                 }
             }
+
+            // Phase 37: Alert Rate Control & Prioritization
+            // 1. Sort by score DESC
+            alertQueue.sort((a, b) => (b.intelligence?.score || 0) - (a.intelligence?.score || 0));
+            
+            // 2. Cap at 20 alerts per cycle
+            const activeAlerts = alertQueue.slice(0, 20);
+            
+            for (const signal of activeAlerts) {
+                const signalKey = `${signal.product.title}-${signal.product.price}`;
+                const alertedAt = this.processedSignals.get(signalKey);
+                
+                if (!alertedAt || alertedAt === 0) {
+                    await this.notifier.send(signal);
+                    this.processedSignals.set(signalKey, Date.now());
+                    this.notificationCount++;
+                }
+            }
+
+            // Prepare Top 5 Actionable for Heartbeat
+            this.cycleMetrics.topActionable = alertQueue
+                .filter(s => s.risk?.worstCaseProfit >= -5)
+                .slice(0, 5);
 
             // Phase 36: Mandatory Output Policy (Self-Healing Flow)
             if (this.notificationCount === 0 && this.cycleMetrics.signalsProcessed > 50) {

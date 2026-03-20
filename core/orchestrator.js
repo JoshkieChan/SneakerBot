@@ -328,6 +328,40 @@ class Orchestrator {
         }
     }
 
+    validateProductQuality(product) {
+        const title = product.title.toLowerCase();
+        
+        // 1. HARD BLOCKLIST (Phase 44)
+        const blocklist = ['bag', 'handbag', 'tote', 'clutch', 'belt bag', 'purse', 'dress', 'skirt', 'blouse', 'belt', 'wallet', 'sock', 'basic tee', 'underwear'];
+        const isBlocked = blocklist.some(term => title.includes(term));
+        if (isBlocked) {
+            console.log(`[FILTER] Skipped Category (Blocklist): ${product.title}`);
+            return false;
+        }
+
+        // 2. CATEGORY WHITELIST (Phase 44)
+        const whitelist = ['sneaker', 'shoe', 'nike', 'jordan', 'yeezy', 'jacket', 'hoodie', 'outerwear', 'coat', 'bearbrick', 'pop mart', 'pokemon', 'trading card'];
+        const isWhitelisted = whitelist.some(term => title.includes(term));
+        
+        // 3. BRAND LOCKDOWN (Non-sneaker apparel must be Tier 1/2)
+        const isApparel = ['shirt', 'pant', 'short', 'denim'].some(term => title.includes(term)) && !isWhitelisted;
+        if (isApparel) {
+            const tiers = this.config.EliteKeywordTiers || {};
+            const hasTierMatch = Object.values(tiers).some(t => t.keywords.some(k => title.includes(k.toLowerCase())));
+            if (!hasTierMatch) {
+                console.log(`[FILTER] Skipped Brand (Generic Apparel): ${product.title}`);
+                return false;
+            }
+        }
+
+        if (!isWhitelisted && !isApparel) {
+            console.log(`[FILTER] Skipped Keyword Miss: ${product.title}`);
+            return false;
+        }
+
+        return true;
+    }
+
     async runCycle() {
         this.resetMetrics();
         await this.sendHeartbeat('START');
@@ -436,6 +470,12 @@ class Orchestrator {
             // Sequential processing to avoid CPU spikes
             for (const product of (allProducts || [])) {
                 if (product.available) {
+                    // Phase 44: Early Exit Quality Filter
+                    if (!this.validateProductQuality(product)) {
+                        this.cycleMetrics.topRejected.push({ product, execution: { reason: 'QUALITY_FILTER_SKIP' } });
+                        continue;
+                    }
+
                     const signal = await this.processProduct(product, browser);
                     if (signal && ['STRONG BUY', 'BUY SMALL', 'WATCH', 'EARLY WATCH'].includes(signal.execution?.verdict)) {
                         alertQueue.push(signal);

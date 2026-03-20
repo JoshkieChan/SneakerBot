@@ -40,8 +40,13 @@ class ScoutAgent {
                 site: target.site
             }));
 
-            // Phase 30: Signal Relaxation (Minimal Data = Found)
-            return results.filter(p => p.title && p.price > 0);
+            const filteredResults = results.filter(p => p.title && p.price > 0);
+            
+            // Phase 44: Early Exit at Scout level
+            if (this.orchestrator && this.orchestrator.validateProductQuality) {
+                return filteredResults.filter(p => this.orchestrator.validateProductQuality(p));
+            }
+            return filteredResults;
         } catch (error) {
             throw error;
         }
@@ -87,11 +92,17 @@ class ScoutAgent {
                 }));
             }, target.selector);
 
-            return products.map(p => ({
+            const results = products.map(p => ({
                 ...p,
                 url: target.url,
                 site: target.site
             }));
+
+            // Phase 44: Early Exit at Scout level
+            if (this.orchestrator && this.orchestrator.validateProductQuality) {
+                return results.filter(p => this.orchestrator.validateProductQuality(p));
+            }
+            return results;
         } catch (error) {
             const isClosing = error.message.includes('Target closed') || 
                               error.message.includes('Session closed') || 

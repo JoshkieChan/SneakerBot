@@ -44,17 +44,9 @@ class IntelligenceAgent {
 
             // 3. Category & Alpha Filtering (Phase 42: Quality Control)
             const titleLower = signal.product.title.toLowerCase();
-            const genericTerms = ['basic', 'tee', 'socks', 'essentials', 'beanie'];
+            const genericTerms = ['basic', 'tee', 'essentials', 'beanie'];
             const isGeneric = genericTerms.some(term => titleLower.includes(term));
             
-            // Phase 42: Quality Penalties
-            const junkCategories = ['bag', 'handbag', 'tote', 'clutch', 'belt bag', 'purse'];
-            const isJunk = junkCategories.some(cat => titleLower.includes(cat));
-            if (isJunk) {
-                console.log(`[INTELLIGENCE] Quality Penalty (-20) for ${signal.product.title}`);
-                score -= 20;
-            }
-
             // Scarcity Boost: XL/XXL Outerwear
             const isOuterwear = ['jacket', 'hoodie', 'outerwear', 'coat'].some(cat => titleLower.includes(cat));
             const isScareSize = ['xl', 'xxl', '2xl'].some(s => titleLower.includes(s));

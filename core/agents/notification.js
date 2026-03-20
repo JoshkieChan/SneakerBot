@@ -13,9 +13,16 @@ class NotificationAgent {
     async send(signal) {
         if (!this.client || !this.client.isReady()) return;
         
+        // Phase 28: Direct Verdict Filter (No Alert Spam for WATCH)
+        const verdict = signal.execution?.verdict;
+        if (!['STRONG BUY', 'BUY SMALL'].includes(verdict)) {
+            console.log(`[NOTIFICATION] Ignoring ${verdict || 'SKIP'}: Not an Execution Signal.`);
+            return;
+        }
+
         const score = signal.intelligence.score;
-        if (score < (this.config.MinAlertScore || 50)) {
-            console.log(`[NOTIFICATION] Skipping: Score (${score}) too low.`);
+        if (score < (this.config.MinAlertScore || 65)) {
+            console.log(`[NOTIFICATION] Skipping: Score (${score}) below alert threshold.`);
             return;
         }
 

@@ -18,14 +18,14 @@ class ExecutionAgent {
         let verdict = 'SKIP';
         let reason = 'PROFIT_THRESHOLD_FAIL';
         
-        // Phase 39/42/43: Hard Profit Gates & Early Alpha
+        // Phase 39/42/43/45: Hard Profit Gates & Early Alpha
         const isModel = confidence === 'MODEL_ESTIMATED';
         
         if (worstCaseProfit >= 20 && liquidity === 'HIGH' && confidence !== 'ESTIMATED' && !isModel) {
             verdict = 'STRONG BUY';
-        } else if (worstCaseProfit >= (isModel ? 10 : 5)) {
+        } else if (worstCaseProfit >= (isModel ? 10 : 8)) {
             verdict = 'BUY SMALL';
-        } else if (worstCaseProfit >= (isModel ? -5 : -10)) {
+        } else if (worstCaseProfit >= (isModel ? -5 : -5)) {
             verdict = 'WATCH';
         }
 

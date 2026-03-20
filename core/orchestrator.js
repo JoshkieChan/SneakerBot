@@ -331,35 +331,51 @@ class Orchestrator {
     validateProductQuality(product) {
         const title = product.title.toLowerCase();
         
-        // 1. HARD BLOCKLIST (Phase 44)
-        const blocklist = ['bag', 'handbag', 'tote', 'clutch', 'belt bag', 'purse', 'dress', 'skirt', 'blouse', 'belt', 'wallet', 'sock', 'basic tee', 'underwear'];
+        // 1. HARD BLOCKLIST (Phase 44/45)
+        const blocklist = ['bag', 'handbag', 'tote', 'clutch', 'belt bag', 'purse', 'dress', 'skirt', 'blouse', 'belt', 'wallet', 'sock', 'basic tee', 'underwear', 'engineered garments', 'studio nicholson'];
         const isBlocked = blocklist.some(term => title.includes(term));
         if (isBlocked) {
-            console.log(`[FILTER] Skipped Category (Blocklist): ${product.title}`);
+            console.log(`[FILTER] Skipped Category/Designer (Blocklist): ${product.title}`);
             return false;
         }
 
-        // 2. CATEGORY WHITELIST (Phase 44)
+        // 2. HARD LIQUIDITY WHITELIST (Phase 45)
+        const tier1 = ['nike', 'jordan', 'supreme', 'off-white', 'travis', 'yeezy'];
+        const tier2 = ['stussy', 'kith', 'bape', 'corteiz', 'denim tears', 'hellstar', 'palace'];
+        const tier3 = ['pokemon', 'pop mart', 'bearbrick', 'labubu', 'sonny angel'];
+        
+        const isTier1 = tier1.some(b => title.includes(b));
+        const isTier2 = tier2.some(b => title.includes(b));
+        const isTier3 = tier3.some(b => title.includes(b));
+
+        if (!isTier1 && !isTier2 && !isTier3) {
+            console.log(`[FILTER] Skipped Brand (Low Liquidity): ${product.title}`);
+            return false;
+        }
+
+        // 3. CATEGORY WHITELIST (Phase 44)
         const whitelist = ['sneaker', 'shoe', 'nike', 'jordan', 'yeezy', 'jacket', 'hoodie', 'outerwear', 'coat', 'bearbrick', 'pop mart', 'pokemon', 'trading card'];
         const isWhitelisted = whitelist.some(term => title.includes(term));
         
-        // 3. BRAND LOCKDOWN (Non-sneaker apparel must be Tier 1/2)
-        const isApparel = ['shirt', 'pant', 'short', 'denim'].some(term => title.includes(term)) && !isWhitelisted;
-        if (isApparel) {
-            const tiers = this.config.EliteKeywordTiers || {};
-            const hasTierMatch = Object.values(tiers).some(t => t.keywords.some(k => title.includes(k.toLowerCase())));
-            if (!hasTierMatch) {
-                console.log(`[FILTER] Skipped Brand (Generic Apparel): ${product.title}`);
-                return false;
-            }
-        }
-
-        if (!isWhitelisted && !isApparel) {
-            console.log(`[FILTER] Skipped Keyword Miss: ${product.title}`);
-            return false;
+        if (!isWhitelisted) {
+             console.log(`[FILTER] Skipped Category Miss: ${product.title}`);
+             return false;
         }
 
         return true;
+    }
+
+    calculateLiquidityScore(product) {
+        const title = product.title.toLowerCase();
+        const tier1 = ['nike', 'jordan', 'supreme', 'off-white', 'travis', 'yeezy'];
+        const tier2 = ['stussy', 'kith', 'bape', 'corteiz', 'denim tears', 'hellstar', 'palace'];
+        const tier3 = ['pokemon', 'pop mart', 'bearbrick', 'labubu', 'sonny angel'];
+
+        if (tier1.some(b => title.includes(b))) return 95;
+        if (tier3.some(b => title.includes(b))) return 85; // Collectibles have high velocity
+        if (tier2.some(b => title.includes(b))) return 80;
+        
+        return 50; // Unknown/Designer (should have been filtered)
     }
 
     async runCycle() {
@@ -476,8 +492,18 @@ class Orchestrator {
                         continue;
                     }
 
+                    // Phase 45: Liquidity Engine Gate
+                    const liquidityScore = this.calculateLiquidityScore(product);
+                    if (liquidityScore < 70) {
+                        console.log(`[LIQUIDITY ENGINE] FORCE SKIP: ${product.title} (Score: ${liquidityScore})`);
+                        this.cycleMetrics.topRejected.push({ product, execution: { reason: 'LOW_LIQUIDITY_SKIP' } });
+                        continue;
+                    }
+
                     const signal = await this.processProduct(product, browser);
                     if (signal && ['STRONG BUY', 'BUY SMALL', 'WATCH', 'EARLY WATCH'].includes(signal.execution?.verdict)) {
+                        signal.intelligence.liquidityScore = liquidityScore;
+                        console.log(`[LIQUIDITY ENGINE] ACCEPTED: ${product.title} (Score: ${liquidityScore})`);
                         alertQueue.push(signal);
                     }
                 }
@@ -490,12 +516,20 @@ class Orchestrator {
             if (alertCount === 0) {
                 console.log('[ALERT PIPELINE] No valid alerts this cycle. (Graceful Skip)');
             } else {
-                // Phase 39/42: Prioritized Alert Output & Early Alpha
+                // Phase 39/42/45: Prioritized Alert Output (Liquidity-First)
                 const safeQueue = Array.isArray(alertQueue) ? alertQueue : [];
-                const strongBuys = safeQueue.filter(s => s.execution.verdict === 'STRONG BUY').sort((a,b) => b.intelligence.score - a.intelligence.score);
-                const buySmalls = safeQueue.filter(s => s.execution.verdict === 'BUY SMALL').sort((a,b) => b.intelligence.score - a.intelligence.score);
-                const earlyWatches = safeQueue.filter(s => s.execution.verdict === 'EARLY WATCH').sort((a,b) => b.intelligence.score - a.intelligence.score);
-                const watches = safeQueue.filter(s => s.execution.verdict === 'WATCH').sort((a,b) => b.intelligence.score - a.intelligence.score);
+                
+                // Sort by Liquidity Score DESC, then Profit DESC
+                const sortedQueue = safeQueue.sort((a, b) => {
+                    const liqDiff = (b.intelligence.liquidityScore || 0) - (a.intelligence.liquidityScore || 0);
+                    if (liqDiff !== 0) return liqDiff;
+                    return (b.risk?.worstCaseProfit || 0) - (a.risk?.worstCaseProfit || 0);
+                });
+
+                const strongBuys = sortedQueue.filter(s => s.execution.verdict === 'STRONG BUY');
+                const buySmalls = sortedQueue.filter(s => s.execution.verdict === 'BUY SMALL');
+                const earlyWatches = sortedQueue.filter(s => s.execution.verdict === 'EARLY WATCH');
+                const watches = sortedQueue.filter(s => s.execution.verdict === 'WATCH');
 
                 // Phase 42: Select prioritized signals (Max 20 total, Early Watch capped at 5)
                 const activeAlerts = [

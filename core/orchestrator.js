@@ -28,7 +28,7 @@ class Orchestrator {
         // System Health Check
         this.validateConfig();
 
-        // Phase 25: Observability & Watchdog
+        // Phase 25/27: Observability & Resource Guard
         this.cycleMetrics = {
             startTime: null,
             signalsFound: 0,
@@ -36,6 +36,10 @@ class Orchestrator {
             decisions: { 'STRONG BUY': 0, 'BUY SMALL': 0, 'WATCH': 0, 'SKIP': 0 },
             errors: []
         };
+
+        // Phase 27: Persistent Batch State
+        this.batchPointer = 0;
+        this.batchSize = 12; // Standard 10-15 range
     }
 
     resetMetrics() {
@@ -51,23 +55,17 @@ class Orchestrator {
     async sendHeartbeat(status = 'START') {
         const timestamp = new Date().toISOString();
         if (status === 'START') {
-            console.log(`\n[${timestamp}] --- CYCLE START ---`);
+            console.log(`\n[${timestamp}] --- CYCLE START (Batch: ${this.batchPointer}) ---`);
         } else {
             const m = this.cycleMetrics;
             console.log(`\n[${timestamp}] --- CYCLE REPORT ---`);
-            console.log(`- Timestamp: ${timestamp}`);
+            console.log(`- Batch Pointer: ${this.batchPointer}`);
             console.log(`- Signals Found: ${m.signalsFound}`);
             console.log(`- Signals Processed: ${m.signalsProcessed}`);
-            console.log(`- Trades Evaluated: ${m.signalsProcessed}`);
-            console.log(`- STRONG BUY count: ${m.decisions['STRONG BUY'] || 0}`);
-            console.log(`- BUY SMALL count: ${m.decisions['BUY SMALL'] || 0}`);
-            console.log(`- WATCH count: ${m.decisions['WATCH'] || 0}`);
-            console.log(`- SKIP count: ${m.decisions['SKIP'] || 0}`);
-            console.log(`- Errors Detected: ${m.errors.length}`);
+            console.log(`- STRONG BUY: ${m.decisions['STRONG BUY'] || 0} | BUY SMALL: ${m.decisions['BUY SMALL'] || 0}`);
+            console.log(`- Errors: ${m.errors.length}`);
             
-            if (m.signalsFound === 0) {
-                console.log('No valid signals this cycle');
-            }
+            if (m.signalsFound === 0) console.log('No valid signals this cycle');
             console.log('----------------------------\n');
         }
     }
@@ -81,12 +79,17 @@ class Orchestrator {
                 process.exit(1);
             }
         }
+        // Force Survival Interval
+        if (!this.config.CheckIntervalMinutes || this.config.CheckIntervalMinutes < 20) {
+            console.log('[PERFORMANCE] Normalizing CheckIntervalMinutes to 20 for VPS survival.');
+            this.config.CheckIntervalMinutes = 20;
+        }
         console.log('✅ Config Integrity Verified');
     }
 
     validateSignal(signal) {
         if (!signal.product.title || isNaN(signal.product.price) || signal.product.price <= 0) {
-            throw new Error('INVALID_SIGNAL_DATA: Missing title or invalid price');
+            throw new Error('INVALID_SIGNAL_DATA');
         }
     }
 
@@ -94,7 +97,6 @@ class Orchestrator {
         try {
             this.config = JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
         } catch (error) {
-            console.error('[ORCHESTRATOR ERROR] Failed to load config.json');
             process.exit(1);
         }
     }
@@ -103,9 +105,6 @@ class Orchestrator {
         this.notifier.client = client;
     }
 
-    /**
-     * The Core Pipeline: Product Signal -> Trade Result
-     */
     async processProduct(rawProduct, browser) {
         this.cycleMetrics.signalsProcessed++;
         
@@ -124,62 +123,79 @@ class Orchestrator {
         };
 
         try {
-            // STEP 0: Data Sanity Governance
             this.validateSignal(signal);
 
-            // STEP 1: Market Intelligence with 10s Timeout
+            // Limited 8s Market Data Timeout for VPS
             const marketPromise = getStockXPrice(browser, signal.product.title);
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('MARKET_SKILL_TIMEOUT')), 10000));
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 8000));
             signal.market.price = await Promise.race([marketPromise, timeoutPromise]).catch(() => null);
 
-            // STEP 2: Intelligence (Scoring)
             signal = await this.intel.analyze(signal);
-
-            // STEP 3: Risk (Capital Protection)
             signal = await this.risk.assess(signal);
-
-            // STEP 4: Execution (Decision)
             signal = await this.exec.decide(signal);
-
-            // STEP 5: Logging (State)
             signal = await this.logger.persist(signal);
-
-            // STEP 6: Notification (Alerting)
             await this.notifier.send(signal);
             
             this.cycleMetrics.decisions[signal.execution.verdict] = (this.cycleMetrics.decisions[signal.execution.verdict] || 0) + 1;
-
             return signal;
         } catch (error) {
             this.cycleMetrics.errors.push(error.message);
-            console.error(`[ORCHESTRATOR ERROR] Pipeline failed for ${rawProduct.title}: ${error.message}`);
             await this.logger.logError(error, 'PIPELINE_FLOW');
             this.cycleMetrics.decisions['SKIP']++;
             return null;
         }
     }
 
-    async runCycle(browser) {
+    async runCycle() {
         this.resetMetrics();
         await this.sendHeartbeat('START');
         
+        // Phase 27: Zero-Persistent Browser Lifecycle
+        const puppeteer = require('puppeteer-extra');
+        const browser = await puppeteer.launch({ 
+            headless: "new", 
+            args: [
+                '--no-sandbox', 
+                '--disable-setuid-sandbox', 
+                '--disable-dev-shm-usage', 
+                '--disable-gpu',
+                '--no-first-run',
+                '--no-zygote',
+                '--single-process' // Hard memory limit for 1GB VPS
+            ] 
+        });
+
         // 60s Global Cycle Timeout
-        const cycleTimeout = setTimeout(() => {
-            console.error('[WATCHDOG] Cycle timed out! Forcing closure.');
-            this.cycleMetrics.errors.push('GLOBAL_CYCLE_TIMEOUT');
+        const cycleTimeout = setTimeout(async () => {
+            console.error('[WATCHDOG] Cycle timed out! Reclaiming resources.');
+            await browser.close().catch(() => {});
         }, 60000);
 
         try {
-            // 1. Scout Stage
+            const allTargets = this.config.TargetURLs;
+            const start = this.batchPointer * this.batchSize;
+            const batch = allTargets.slice(start, start + this.batchSize);
+            
+            // Advance pointer for next cycle
+            this.batchPointer = (start + this.batchSize >= allTargets.length) ? 0 : this.batchPointer + 1;
+
             let allProducts = [];
-            for (const target of this.config.TargetURLs) {
+            for (const target of batch) {
                 try {
+                    // Phase 27: Strict Sequential & Lightweight
                     if (target.url.includes('products.json')) {
                         const products = await this.scout.scanShopify(target, 'Mozilla/5.0...');
                         allProducts = allProducts.concat(products);
                     } else {
                         const page = await browser.newPage();
-                        page.setDefaultNavigationTimeout(15000); // 15s page load timeout
+                        // Lightweight Mode: Block heavy resources
+                        await page.setRequestInterception(true);
+                        page.on('request', (req) => {
+                            if (['image', 'font', 'media'].includes(req.resourceType())) req.abort();
+                            else req.continue();
+                        });
+
+                        page.setDefaultNavigationTimeout(10000); // 10s page load
                         const products = await this.scout.scanBrowser(target, page);
                         allProducts = allProducts.concat(products);
                         await page.close();
@@ -191,7 +207,7 @@ class Orchestrator {
 
             this.cycleMetrics.signalsFound = allProducts.length;
 
-            // 2. Process all potential signals
+            // Sequential processing to avoid CPU spikes
             for (const product of allProducts) {
                 if (product.available) {
                     await this.processProduct(product, browser);
@@ -199,6 +215,7 @@ class Orchestrator {
             }
         } finally {
             clearTimeout(cycleTimeout);
+            await browser.close().catch(() => {});
             await this.sendHeartbeat('END');
         }
     }

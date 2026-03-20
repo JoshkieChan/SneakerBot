@@ -11,72 +11,62 @@ class ScoutAgent {
         this.config = config;
     }
 
-    async scanShopify(target, userAgent, retries = 2) {
+    async scanShopify(target, userAgent) {
+        const url = target.url;
         console.log(`[SCOUT] Scanning Shopify: ${target.site}...`);
-        for (let i = 0; i <= retries; i++) {
-            try {
-                const response = await fetch(target.url, {
-                    headers: { 'User-Agent': userAgent },
-                    timeout: 10000 // 10s fetch timeout
-                });
-                if (!response.ok) throw new Error(`HTTP_${response.status}`);
-                const data = await response.json();
-                return data.products.map(p => ({
-                    title: p.title,
-                    vendor: p.vendor,
-                    handle: p.handle,
-                    price: parseFloat(p.variants[0].price),
-                    available: p.variants[0].available,
-                    tags: p.tags || [],
-                    link: `${target.url.split('/products.json')[0]}/products/${p.handle}`,
-                    site: target.site,
-                    variantId: p.variants[0].id
-                }));
-            } catch (error) {
-                if (i === retries) {
-                    console.error(`[SCOUT ERROR] ${target.site} exhausted retries: ${error.message}`);
-                    return [];
-                }
-                console.log(`[SCOUT] Retrying ${target.site} (${i + 1}/${retries})...`);
-                await new Promise(r => setTimeout(r, 2000));
-            }
+
+        try {
+            // Strict 8s Timeout for VPS Survival
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000);
+
+            const response = await fetch(url, {
+                headers: { 'User-Agent': userAgent },
+                signal: controller.signal
+            });
+            clearTimeout(timeout);
+
+            if (!response.ok) throw new Error(`HTTP_${response.status}`);
+            const data = await response.json();
+            
+            return (data.products || []).slice(0, 50).map(p => ({
+                title: p.title,
+                handle: p.handle,
+                price: parseFloat(p.variants[0]?.price),
+                available: p.variants.some(v => v.available),
+                url: `https://${new URL(url).hostname}/products/${p.handle}`,
+                image: p.images[0]?.src,
+                site: target.site
+            }));
+        } catch (error) {
+            throw error;
         }
     }
 
-    async scanBrowser(target, page, retries = 1) {
+    async scanBrowser(target, page) {
         console.log(`[SCOUT] Scanning Browser-site: ${target.site}...`);
-        for (let i = 0; i <= retries; i++) {
-            try {
-                await page.goto(target.url, { waitUntil: 'networkidle2', timeout: 15000 });
-                const data = await page.evaluate(() => {
-                    const titleEl = document.querySelector('h1');
-                    const priceEl = document.querySelector('[class*="price"]');
-                    const buyBtn = Array.from(document.querySelectorAll('button')).find(b => 
-                        b.innerText.toLowerCase().includes('add') || b.innerText.toLowerCase().includes('buy')
-                    );
-                    return {
-                        productName: titleEl ? titleEl.innerText : document.title,
-                        priceText: priceEl ? priceEl.innerText : '0',
-                        buyEnabled: !!buyBtn && !buyBtn.disabled
-                    };
-                });
+        
+        try {
+            // Orchestrator handles images/font blocking & 10s navigation timeout
+            await page.goto(target.url, { waitUntil: 'domcontentloaded' });
+            
+            // Fast extraction (8s max)
+            const products = await page.evaluate((selector) => {
+                const items = Array.from(document.querySelectorAll(selector || '.product, [class*="product"]'));
+                return items.slice(0, 15).map(item => ({
+                    title: item.innerText.split('\n')[0].trim(),
+                    available: !item.innerText.toLowerCase().includes('sold out'),
+                    price: parseFloat(item.innerText.match(/\d+\.\d+/)?.[0] || 0)
+                }));
+            }, target.selector);
 
-                return [{
-                    title: data.productName,
-                    price: parseFloat(data.priceText.replace(/[^0-9.]/g, '')) || 0,
-                    available: data.buyEnabled,
-                    link: target.url,
-                    site: target.site,
-                    tags: [] 
-                }];
-            } catch (error) {
-                if (i === retries) {
-                    console.error(`[SCOUT ERROR] ${target.site} exhausted browser retries: ${error.message}`);
-                    return [];
-                }
-                console.log(`[SCOUT] Retrying browser ${target.site} (${i + 1}/${retries})...`);
-                await new Promise(r => setTimeout(r, 3000));
-            }
+            return products.map(p => ({
+                ...p,
+                url: target.url,
+                site: target.site
+            }));
+        } catch (error) {
+            throw error;
         }
     }
 }

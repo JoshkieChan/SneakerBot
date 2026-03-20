@@ -7,7 +7,7 @@ puppeteer.use(StealthPlugin());
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 
 async function run() {
-    console.log('--- Modular Resale Intelligence Platform | System Start ---');
+    console.log('--- Modular Resale Intelligence Platform | VPS Survival Mode ---');
     
     // 1. Initialize Orchestrator
     const orchestrator = new Orchestrator();
@@ -24,20 +24,14 @@ async function run() {
         }
     }
 
-    // 3. Initialize Persistent Browser
-    const browser = await puppeteer.launch({ 
-        headless: "new", 
-        args: ['--no-sandbox', '--disable-setuid-sandbox'] 
-    });
-
-    // 4. Start the Orchestration Loop
+    // 3. Start the Orchestration Loop (Browser lifecycle managed by Orchestrator)
     const startCycle = async () => {
         try {
-            await orchestrator.runCycle(browser);
+            await orchestrator.runCycle();
         } catch (e) {
             console.error('[CRITICAL SYSTEM ERROR]', e);
         } finally {
-            const interval = (orchestrator.config.CheckIntervalMinutes || 30) * 60000;
+            const interval = (orchestrator.config.CheckIntervalMinutes || 20) * 60000;
             console.log(`\nNext cycle in ${orchestrator.config.CheckIntervalMinutes}m...`);
             setTimeout(startCycle, interval);
         }

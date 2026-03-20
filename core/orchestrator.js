@@ -48,6 +48,7 @@ class Orchestrator {
         this.isShuttingDown = false; // Phase 33: Global Shutdown Flag
         this.processedSignals = new Map(); // Phase 31: Persistent Deduplication (24h)
         this.notificationCount = 0;
+        this.tradeHistory = this.loadTradeHistory(); // Phase 48: Restock Tracking
 
         // Phase 35: Standardized Metrics Initialization
         this.metrics = {
@@ -418,6 +419,40 @@ class Orchestrator {
         return 50; 
     }
 
+    /**
+     * Phase 48: Load Trade History for Restock Detection.
+     */
+    loadTradeHistory() {
+        try {
+            const tradesPath = path.join(__dirname, '../data/trades.json');
+            if (fs.existsSync(tradesPath)) {
+                const data = JSON.parse(fs.readFileSync(tradesPath, 'utf8'));
+                return data.history || {};
+            }
+        } catch (e) {
+            console.error('[ORCHESTRATOR] Failed to load trade history');
+        }
+        return {};
+    }
+
+    /**
+     * Phase 48: Check for Restock.
+     */
+    checkRestock(product) {
+        if (!product || (!product.id && !product.url)) return false;
+        const key = product.url || product.link;
+        const existing = this.tradeHistory[key];
+        
+        if (!existing) return false;
+        
+        // Match status based on trades.json schema: "Sold Out" vs "Available"
+        if (existing.status === 'Sold Out' && product.available === true) {
+            console.log(`[RESTOCK DETECTED] ${product.title}`);
+            return true;
+        }
+        return false;
+    }
+
     async runCycle() {
         this.resetMetrics();
         await this.sendHeartbeat('START');
@@ -554,8 +589,10 @@ class Orchestrator {
                         continue;
                     }
 
-                    // Phase 48: Restock Detection
-                    const isRestock = this.checkRestock(product);
+                    // Phase 48: Restock Detection (Defensive Guard)
+                    const isRestock = typeof this.checkRestock === "function" 
+                        ? this.checkRestock(product) 
+                        : false;
 
                     // Phase 48: Conditional Tier Execution
                     if (!isRestock) {

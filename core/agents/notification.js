@@ -11,6 +11,10 @@ class NotificationAgent {
     }
 
     async send(signal) {
+        // EMERGENCY KILL SWITCH: SHUT DOWN ALL DISCORD ALERTS
+        console.log('[NOTIFICATION] DISCORD MUTE ACTIVE. NO ALERTS WILL BE SENT.');
+        return;
+
         if (!this.client || !this.client.isReady()) return;
         
         // Phase 28.1: Hardened Verdict Filter

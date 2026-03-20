@@ -1,8 +1,9 @@
 services:
-  sneakerbot:
+  sneakerbot-v2:
     build: .
+    container_name: sneakerbot-v2
     restart: on-failure
-    stop_grace_period: 1s
+    stop_grace_period: 30s
     env_file:
       - .env
     volumes:

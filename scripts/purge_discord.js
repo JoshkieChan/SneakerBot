@@ -1,7 +1,7 @@
 const { Client, GatewayIntentBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, '../config/config.json'), 'utf8'));
 const NotificationAgent = require('../core/agents/notification');

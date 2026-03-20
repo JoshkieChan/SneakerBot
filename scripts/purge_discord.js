@@ -3,8 +3,8 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config/config.json'), 'utf8'));
-const NotificationAgent = require('./core/agents/notification');
+const config = JSON.parse(fs.readFileSync(path.join(__dirname, '../config/config.json'), 'utf8'));
+const NotificationAgent = require('../core/agents/notification');
 
 async function runPurge() {
     const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });

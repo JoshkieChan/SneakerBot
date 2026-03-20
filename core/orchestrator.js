@@ -8,6 +8,8 @@ const LoggingAgent = require('./agents/logging');
 const NotificationAgent = require('./agents/notification');
 const { getStockXPrice } = require('../skills/market_data');
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 /**
  * System Orchestrator: Coordinates specialized agents, enforces architecture,
  * and ensures scalable, production-grade execution.
@@ -18,7 +20,7 @@ class Orchestrator {
         this.loadConfig();
         
         // Initialize Agents
-        this.scout = new ScoutAgent(this.config);
+        this.scout = new ScoutAgent(this.config, this);
         this.intel = new IntelligenceAgent(this.config);
         this.risk = new RiskAgent(this.config);
         this.exec = new ExecutionAgent(this.config);
@@ -42,10 +44,18 @@ class Orchestrator {
         this.batchSize = 12; // Standard 10-15 range
         // Phase 28: Signal Quality Feedback Loop
         this.emptyCycleCount = 0;
-        this.softModeActive = false;
-        this.processedSignals = new Map(); // Phase 31: Persistent Deduplication (24h)
-        this.notificationCount = 0;
         this.siteFailures = new Map(); // Phase 30: Track consecutive failures
+        this.isShuttingDown = false; // Phase 33: Global Shutdown Flag
+
+        // Phase 33: Global Process Resilience
+        process.on('unhandledRejection', (reason, promise) => {
+            console.error('[CRITICAL] Unhandled Rejection at:', promise, 'reason:', reason);
+            // Do not exit
+        });
+        process.on('uncaughtException', (err) => {
+            console.error('[CRITICAL] Uncaught Exception:', err);
+            // Do not exit
+        });
     }
 
     resetMetrics() {
@@ -153,8 +163,8 @@ class Orchestrator {
         try {
             this.validateSignal(signal);
 
-            // Limited 8s Market Data Timeout for VPS
-            const marketPromise = getStockXPrice(browser, signal.product.title);
+            // Phase 33: Pass orchestrator for shutdown resilience
+            const marketPromise = getStockXPrice(browser, signal.product.title, this);
             
             // Phase 30: Relaxed 12s Market Data Timeout
             signal.market.price = await Promise.race([
@@ -204,6 +214,13 @@ class Orchestrator {
         
         // Phase 27: Zero-Persistent Browser Lifecycle
         const puppeteer = require('puppeteer-extra');
+        const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+        
+        // Phase 33: Disable User-Agent Override (Source of crashes)
+        const stealth = StealthPlugin();
+        stealth.enabledEvasions.delete('user-agent-override');
+        puppeteer.use(stealth);
+
         const browser = await puppeteer.launch({ 
             headless: "new", 
             args: [
@@ -217,9 +234,13 @@ class Orchestrator {
             ] 
         });
 
-        // Phase 30: Relaxed 120s Global Cycle Timeout
+        this.isShuttingDown = false;
+
+        // Phase 30/33: Relaxed 120s Global Cycle Timeout + Safe Shutdown
         const cycleTimeout = setTimeout(async () => {
             console.error('[WATCHDOG] Cycle timed out! Reclaiming resources.');
+            this.isShuttingDown = true;
+            await sleep(100); // Small buffer for agents to see the flag
             await browser.close().catch(() => {});
         }, 120000);
 
@@ -248,23 +269,37 @@ class Orchestrator {
                         this.siteFailures.set(target.site, 0); // Reset on success
                     } else {
                         const page = await browser.newPage();
-                        // Lightweight Mode: Block heavy resources
-                        await page.setRequestInterception(true);
-                        page.on('request', (req) => {
-                            if (['image', 'font', 'media'].includes(req.resourceType())) req.abort();
-                            else req.continue();
-                        });
+                        try {
+                            // Phase 33: Manual User Agent (Avoid stealth override crash)
+                            await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36');
+                            
+                            // Lightweight Mode: Block heavy resources
+                            await page.setRequestInterception(true);
+                            page.on('request', (req) => {
+                                if (['image', 'font', 'media'].includes(req.resourceType())) req.abort();
+                                else req.continue();
+                            });
 
-                        page.setDefaultNavigationTimeout(15000); // Phase 30: 15s page load
-                        const products = await this.scout.scanBrowser(target, page);
-                        allProducts = allProducts.concat(products);
-                        this.siteFailures.set(target.site, 0); // Reset on success
-                        await page.close();
+                            page.setDefaultNavigationTimeout(15000); // Phase 30: 15s page load
+                            
+                            if (this.isShuttingDown) throw new Error('SHUTDOWN_IN_PROGRESS');
+                            const products = await this.scout.scanBrowser(target, page);
+                            allProducts = allProducts.concat(products);
+                            this.siteFailures.set(target.site, 0); // Reset on success
+                        } catch (e) {
+                            if (e.message.includes('Target closed') || this.isShuttingDown) {
+                                console.log(`[ORCHESTRATOR] Site ${target.site} skipped during shutdown.`);
+                            } else {
+                                throw e;
+                            }
+                        } finally {
+                            if (!page.isClosed()) await page.close().catch(() => {});
+                        }
                     }
                 } catch (e) {
                     this.cycleMetrics.transientErrors++;
-                    this.siteFailures.set(target.site, failures + 1);
-                    console.warn(`[ORCHESTRATOR] Site ${target.site} failure count: ${failures + 1}`);
+                    this.siteFailures.set(target.site, (this.siteFailures.get(target.site) || 0) + 1);
+                    console.warn(`[ORCHESTRATOR] Site ${target.site} failure count: ${this.siteFailures.get(target.site)}`);
                 }
             }
 

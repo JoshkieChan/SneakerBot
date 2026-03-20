@@ -7,8 +7,9 @@ const fs = require('fs');
  * Role: Data Acquisition & Signal Initializer.
  */
 class ScoutAgent {
-    constructor(config) {
+    constructor(config, orchestrator) {
         this.config = config;
+        this.orchestrator = orchestrator;
     }
 
     async scanShopify(target, userAgent) {
@@ -47,12 +48,19 @@ class ScoutAgent {
     }
 
     async scanBrowser(target, page) {
+        if (!page || page.isClosed() || this.orchestrator?.isShuttingDown) {
+            console.log(`[SCOUT] Skipping ${target.site}: Browser is shutting down or page is closed.`);
+            return [];
+        }
+
         console.log(`[SCOUT] Scanning Browser-site: ${target.site}...`);
         
         try {
             // Orchestrator handles images/font blocking & 15s navigation timeout
             await page.goto(target.url, { waitUntil: 'domcontentloaded' });
             
+            if (this.orchestrator?.isShuttingDown) throw new Error('SHUTDOWN_IN_PROGRESS');
+
             // Phase 30: Relaxed 12s extraction + Fallback Scavenger Mode
             const products = await page.evaluate((selector) => {
                 let items = Array.from(document.querySelectorAll(selector || '.product, [class*="product"], [class*="item"]'));
@@ -85,6 +93,14 @@ class ScoutAgent {
                 site: target.site
             }));
         } catch (error) {
+            const isClosing = error.message.includes('Target closed') || 
+                              error.message.includes('Session closed') || 
+                              this.orchestrator?.isShuttingDown;
+            
+            if (isClosing) {
+                console.log(`[SCOUT] Browser closed during ${target.site} scan (Transient).`);
+                return [];
+            }
             throw error;
         }
     }

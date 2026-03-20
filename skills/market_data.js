@@ -4,14 +4,22 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
  * Market Data Skill: Handles scraping and fetching price data from 
  * external marketplaces like StockX.
  */
-async function getStockXPrice(browser, productName) {
+async function getStockXPrice(browser, productName, orchestrator = null) {
+    if (!browser || (orchestrator && orchestrator.isShuttingDown)) return null;
+    
     console.log(`[SKILL] Fetching StockX price for: ${productName}...`);
     let attempts = 0;
     while (attempts < 2) {
-        const page = await browser.newPage();
+        if (orchestrator && orchestrator.isShuttingDown) break;
+        
+        let page;
         try {
+            page = await browser.newPage();
             const searchUrl = `https://stockx.com/search?s=${encodeURIComponent(productName)}`;
             await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+            
+            if (orchestrator && orchestrator.isShuttingDown) break;
+
             const price = await page.evaluate(() => {
                 const gridItems = document.querySelectorAll('[data-testid="product-tile"]');
                 if (gridItems.length > 0) {
@@ -21,7 +29,17 @@ async function getStockXPrice(browser, productName) {
                 return null;
             });
             if (price) return price;
-        } catch (error) {} finally { await page.close(); }
+        } catch (error) {
+            const isClosing = error.message.includes('Target closed') || 
+                              error.message.includes('Session closed') || 
+                              (orchestrator && orchestrator.isShuttingDown);
+            if (isClosing) {
+                console.log(`[SKILL] Browser closed during StockX fetch for ${productName} (Transient).`);
+                break;
+            }
+        } finally { 
+            if (page && !page.isClosed()) await page.close().catch(() => {}); 
+        }
         attempts++;
         await sleep(2000);
     }

@@ -80,6 +80,30 @@ class NotificationAgent {
             console.error(`[NOTIFICATION ERROR] ${error.message}`);
         }
     }
+
+    async purgeChannel(channelId) {
+        if (!this.client || !this.client.isReady()) return;
+        try {
+            const channel = await this.client.channels.fetch(channelId);
+            if (!channel || !channel.isTextBased()) return;
+
+            console.log(`[NOTIFICATION] Purging channel: ${channelId}...`);
+            let fetched;
+            do {
+                fetched = await channel.messages.fetch({ limit: 100 });
+                // Only delete bot's own messages to be safe
+                const botMessages = fetched.filter(m => m.author.id === this.client.user.id);
+                if (botMessages.size > 0) {
+                    await channel.bulkDelete(botMessages, true);
+                    console.log(`[NOTIFICATION] Deleted ${botMessages.size} alerts.`);
+                }
+            } while (fetched.size >= 10); // Small buffer
+            
+            console.log('[NOTIFICATION] Discord Purge Complete.');
+        } catch (error) {
+            console.error(`[NOTIFICATION PURGE ERROR] ${error.message}`);
+        }
+    }
 }
 
 module.exports = NotificationAgent;

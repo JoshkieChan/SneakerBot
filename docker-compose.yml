@@ -1,7 +1,7 @@
 services:
-  ghost-sniper:
+  sneakerbot-pro:
     build: .
-    container_name: ghost-sniper
+    container_name: sneakerbot-pro
     restart: always
     env_file:
       - .env

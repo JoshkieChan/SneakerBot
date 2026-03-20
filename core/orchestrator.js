@@ -41,7 +41,7 @@ class Orchestrator {
 
         // Phase 27: Persistent Batch State
         this.batchPointer = 0;
-        this.batchSize = 12; // Standard 10-15 range
+        this.batchSize = 24; // Phase 34: Scaled for Hetzner Dedicated CPU
         // Phase 28: Signal Quality Feedback Loop
         this.emptyCycleCount = 0;
         this.siteFailures = new Map(); // Phase 30: Track consecutive failures
@@ -82,11 +82,11 @@ class Orchestrator {
     async sendHeartbeat(status = 'START') {
         const timestamp = new Date().toISOString();
         if (status === 'START') {
-            const modeLabel = this.softModeActive ? ' [SOFT MODE ACTIVE]' : '';
+            const modeLabel = this.softModeActive ? ' [SOFT MODE ACTIVE]' : ' [HETZNER PERFORMANCE MODE]';
             console.log(`\n[${timestamp}] --- CYCLE START (Batch: ${this.batchPointer})${modeLabel} ---`);
         } else {
             const m = this.cycleMetrics;
-            console.log(`\n[${timestamp}] --- CYCLE REPORT ---`);
+            console.log(`\n[${timestamp}] --- CYCLE REPORT [HETZNER] ---`);
             console.log(`- Batch Pointer: ${this.batchPointer}`);
             console.log(`- Signals Found: ${m.signalsFound}`);
             console.log(`- Signals Processed: ${m.signalsProcessed}`);
@@ -229,20 +229,20 @@ class Orchestrator {
                 '--disable-dev-shm-usage', 
                 '--disable-gpu',
                 '--no-first-run',
-                '--no-zygote',
-                '--single-process' // Hard memory limit for 1GB VPS
+                '--no-zygote'
+                // --single-process removed for Hetzner 8GB stability
             ] 
         });
 
         this.isShuttingDown = false;
 
-        // Phase 30/33: Relaxed 120s Global Cycle Timeout + Safe Shutdown
+        // Phase 34: Relaxed 300s (5m) Global Cycle Timeout for Hetzner
         const cycleTimeout = setTimeout(async () => {
             console.error('[WATCHDOG] Cycle timed out! Reclaiming resources.');
             this.isShuttingDown = true;
-            await sleep(100); // Small buffer for agents to see the flag
+            await sleep(500); // Larger buffer for agents
             await browser.close().catch(() => {});
-        }, 120000);
+        }, 300000);
 
         try {
             const allTargets = this.config.TargetURLs;

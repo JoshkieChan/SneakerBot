@@ -1,7 +1,7 @@
 services:
-  sneakerbot-v2:
+  sneakerbot:
     build: .
-    container_name: sneakerbot-v2
+    container_name: sneakerbot
     restart: on-failure
     stop_grace_period: 30s
     env_file:
@@ -16,7 +16,4 @@ services:
       options:
         max-size: "10mb"
         max-file: "3"
-    deploy:
-      resources:
-        limits:
-          memory: 800M
+

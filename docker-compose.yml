@@ -15,3 +15,7 @@ services:
       options:
         max-size: "10mb"
         max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 800M

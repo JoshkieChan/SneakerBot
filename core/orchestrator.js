@@ -43,14 +43,22 @@ class Orchestrator {
         // Phase 28: Signal Quality Feedback Loop
         this.emptyCycleCount = 0;
         this.softModeActive = false;
-        this.processedSignals = new Set();
+        this.processedSignals = new Map(); // Phase 31: Persistent Deduplication (24h)
         this.notificationCount = 0;
         this.siteFailures = new Map(); // Phase 30: Track consecutive failures
     }
 
     resetMetrics() {
-        this.processedSignals.clear();
         this.notificationCount = 0;
+        
+        // Phase 31: 24-Hour Persistent Deduplication Cleanup
+        const now = Date.now();
+        for (const [key, timestamp] of this.processedSignals.entries()) {
+            if (now - timestamp > 24 * 60 * 60 * 1000) {
+                this.processedSignals.delete(key);
+            }
+        }
+
         this.cycleMetrics = {
             startTime: new Date(),
             signalsFound: 0,
@@ -119,10 +127,12 @@ class Orchestrator {
     }
 
     async processProduct(rawProduct, browser) {
-        // Phase 28.2: Hard Deduplication
+        // Phase 28.2: Hard Deduplication (Cycle-Level & Persistent)
         const signalKey = `${rawProduct.title}-${rawProduct.price}`;
         if (this.processedSignals.has(signalKey)) return null;
-        this.processedSignals.add(signalKey);
+        
+        // Mark as 'seen' for this session/day with a 0 timestamp (not yet alerted)
+        this.processedSignals.set(signalKey, 0); 
 
         this.cycleMetrics.signalsProcessed++;
         
@@ -160,11 +170,17 @@ class Orchestrator {
             signal = await this.exec.decide(signal);
             signal = await this.logger.persist(signal);
             
-            // Phase 28.2: Cap at 3 notifications per cycle to eliminate spam
+            // Phase 31: Hard 24-Hour Deduplication
             const verdict = signal.execution.verdict;
             if (['STRONG BUY', 'BUY SMALL'].includes(verdict) && this.notificationCount < 3) {
-                await this.notifier.send(signal);
-                this.notificationCount++;
+                const signalKey = `${signal.product.title}-${signal.product.price}`;
+                if (this.processedSignals.has(signalKey)) {
+                    console.log(`[ORCHESTRATOR] Deduplicating: Alert already sent for ${signalKey}`);
+                } else {
+                    await this.notifier.send(signal);
+                    this.processedSignals.set(signalKey, Date.now());
+                    this.notificationCount++;
+                }
             }
             
             this.cycleMetrics.decisions[verdict] = (this.cycleMetrics.decisions[verdict] || 0) + 1;

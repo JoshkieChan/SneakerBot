@@ -59,6 +59,13 @@ class IntelligenceAgent {
                 score += 5;
             }
 
+            // Phase 31: Scavenger Mode Penalty (-15)
+            // Ensures fallback data must hit a very high keyword threshold to trigger alerts.
+            if (signal.product.isFallback) {
+                console.log(`[INTELLIGENCE] Applying Fallback Penalty (-15) for ${signal.product.title}`);
+                score -= 15;
+            }
+
             signal.intelligence = {
                 ...signal.intelligence,
                 score,

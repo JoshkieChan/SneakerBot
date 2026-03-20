@@ -84,385 +84,102 @@
   "BehavioralStealth": true,
   "PreDropScouting": true,
   "TargetURLs": [
-    {
-      "site": "Nike SNKRS Launch",
-      "url": "https://www.nike.com/launch"
-    },
-    {
-      "site": "adidas CONFIRMED",
-      "url": "https://www.adidas.com/us/confirmed"
-    },
-    {
-      "site": "Foot Locker Release Calendar",
-      "url": "https://www.footlocker.com/release-calendar"
-    },
-    {
-      "site": "Finish Line Release Calendar",
-      "url": "https://www.finishline.com/release-calendar"
-    },
-    {
-      "site": "Supreme New Drops",
-      "url": "https://us.supreme.com/collections/new",
-      "isBrowser": true
-    },
-    { "site": "GOAT Just Dropped", "url": "https://goat.com/collections/just-dropped", "isBrowser": true },
     { "site": "StockX Most Active", "url": "https://stockx.com/search?sort=most-active", "isBrowser": true },
-    {
-      "site": "Travis Scott Official",
-      "url": "https://shop.travisscott.com/"
-    },
-    {
-      "site": "Pokemon Center US",
-      "url": "https://www.pokemoncenter.com/category/new-releases"
-    },
-    {
-      "site": "Pop Mart US",
-      "url": "https://www.popmart.com/us/products"
-    },
-    {
-      "site": "KAWS",
-      "url": "https://kawsone.com/"
-    },
-    {
-      "site": "Sp5der Worldwide",
-      "url": "https://kingsp5der.com/"
-    },
-    {
-      "site": "Denim Tears",
-      "url": "https://denimtears.com/"
-    },
-    {
-      "site": "Corteiz",
-      "url": "https://www.crtz.xyz/"
-    },
-    {
-      "site": "Lululemon",
-      "url": "https://shop.lululemon.com/c/accessories/_/N-1z0xcm7Z816"
-    },
-    {
-      "site": "Snipes USA",
-      "url": "https://www.snipesusa.com/new-arrivals/"
-    },
-    {
-      "site": "SSENSE",
-      "url": "https://www.ssense.com/en-us/men/designers/fear-of-god-essentials"
-    },
-    {
-      "site": "Mr Porter",
-      "url": "https://www.mrporter.com/en-us/mens/designers/fear-of-god-essentials"
-    },
-    {
-      "site": "Kith - All Products (JSON)",
-      "url": "https://kith.com/products.json?limit=250"
-    },
-    {
-      "site": "Kith - Footwear (JSON)",
-      "url": "https://kith.com/collections/footwear/products.json?limit=250"
-    },
-    {
-      "site": "Kith - New Arrivals (JSON)",
-      "url": "https://kith.com/collections/new-arrivals/products.json?limit=250"
-    },
-    {
-      "site": "Concepts - All Products (JSON)",
-      "url": "https://cncpts.com/products.json?limit=250"
-    },
-    {
-      "site": "Concepts - Footwear (JSON)",
-      "url": "https://cncpts.com/collections/footwear/products.json?limit=250"
-    },
-    {
-      "site": "Concepts - New Arrivals (JSON)",
-      "url": "https://cncpts.com/collections/new-arrivals/products.json?limit=250"
-    },
-    {
-      "site": "Bodega - All Products (JSON)",
-      "url": "https://bdgastore.com/products.json?limit=250"
-    },
-    {
-      "site": "Bodega - Footwear (JSON)",
-      "url": "https://bdgastore.com/collections/footwear/products.json?limit=250"
-    },
-    {
-      "site": "Bodega - New Arrivals (JSON)",
-      "url": "https://bdgastore.com/collections/new-arrivals/products.json?limit=250"
-    },
-    {
-      "site": "A Ma Maniere - All Products (JSON)",
-      "url": "https://www.a-ma-maniere.com/products.json?limit=250"
-    },
-    {
-      "site": "A Ma Maniere - Footwear (JSON)",
-      "url": "https://www.a-ma-maniere.com/collections/footwear/products.json?limit=250"
-    },
-    {
-      "site": "Social Status - All Products (JSON)",
-      "url": "https://www.socialstatuspgh.com/products.json?limit=250"
-    },
-    {
-      "site": "Social Status - Footwear (JSON)",
-      "url": "https://www.socialstatuspgh.com/collections/footwear/products.json?limit=250"
-    },
-    {
-      "site": "APB Store - All Products (JSON)",
-      "url": "https://www.apbstore.com/products.json?limit=250"
-    },
-    {
-      "site": "APB Store - Footwear (JSON)",
-      "url": "https://www.apbstore.com/collections/footwear/products.json?limit=250"
-    },
-    {
-      "site": "Undefeated - All Products (JSON)",
-      "url": "https://undefeated.com/products.json?limit=250"
-    },
-    {
-      "site": "Undefeated - Footwear (JSON)",
-      "url": "https://undefeated.com/collections/footwear/products.json?limit=250"
-    },
-    {
-      "site": "END - All Products (JSON)",
-      "url": "https://www.endclothing.com/us/products.json?limit=250"
-    },
-    {
-      "site": "DSM - All Products (JSON)",
-      "url": "https://shop.doverstreetmarket.com/products.json?limit=250"
-    },
-    {
-      "site": "Extra Butter - All Products (JSON)",
-      "url": "https://extrabutterny.com/products.json?limit=250"
-    },
-    {
-      "site": "Extra Butter - Footwear (JSON)",
-      "url": "https://extrabutterny.com/collections/footwear/products.json?limit=250"
-    },
-    {
-      "site": "Extra Butter - New Arrivals (JSON)",
-      "url": "https://extrabutterny.com/collections/new-arrivals/products.json?limit=250"
-    },
-    {
-      "site": "Extra Butter - Sale (JSON)",
-      "url": "https://extrabutterny.com/collections/sale/products.json?limit=250"
-    },
-    {
-      "site": "Notre - All Products (JSON)",
-      "url": "https://www.notre-shop.com/products.json?limit=250"
-    },
-    {
-      "site": "Notre - Footwear (JSON)",
-      "url": "https://www.notre-shop.com/collections/footwear/products.json?limit=250"
-    },
-    {
-      "site": "Notre - New Arrivals (JSON)",
-      "url": "https://www.notre-shop.com/collections/new-arrivals/products.json?limit=250"
-    },
-    {
-      "site": "Notre - Sale (JSON)",
-      "url": "https://www.notre-shop.com/collections/sale/products.json?limit=250"
-    },
-    {
-      "site": "Feature - All Products (JSON)",
-      "url": "https://feature.com/products.json?limit=250"
-    },
-    {
-      "site": "Feature - Footwear (JSON)",
-      "url": "https://feature.com/collections/footwear/products.json?limit=250"
-    },
-    {
-      "site": "Feature - New Arrivals (JSON)",
-      "url": "https://feature.com/collections/new-arrivals/products.json?limit=250"
-    },
-    {
-      "site": "Feature - Sale (JSON)",
-      "url": "https://feature.com/collections/sale/products.json?limit=250"
-    },
-    {
-      "site": "Sneaker Politics - All Products (JSON)",
-      "url": "https://sneakerpolitics.com/products.json?limit=250"
-    },
-    {
-      "site": "Sneaker Politics - Footwear (JSON)",
-      "url": "https://sneakerpolitics.com/collections/footwear/products.json?limit=250"
-    },
-    {
-      "site": "Sneaker Politics - New Arrivals (JSON)",
-      "url": "https://sneakerpolitics.com/collections/new-arrivals/products.json?limit=250"
-    },
-    {
-      "site": "Sneaker Politics - Sale (JSON)",
-      "url": "https://sneakerpolitics.com/collections/sale/products.json?limit=250"
-    },
-    {
-      "site": "BBC ICECREAM - All Products (JSON)",
-      "url": "https://bbcicecream.com/products.json?limit=250"
-    },
-    {
-      "site": "BBC ICECREAM - New Arrivals (JSON)",
-      "url": "https://bbcicecream.com/collections/new-arrivals/products.json?limit=250"
-    },
-    {
-      "site": "BBC ICECREAM - Sale (JSON)",
-      "url": "https://bbcicecream.com/collections/sale/products.json?limit=250"
-    },
-    {
-      "site": "Hat Club - All Products (JSON)",
-      "url": "https://www.hatclub.com/products.json?limit=250"
-    },
-    {
-      "site": "Hat Club - New Arrivals (JSON)",
-      "url": "https://www.hatclub.com/collections/new-arrivals/products.json?limit=250"
-    },
-    {
-      "site": "Kappa USA - All Products (JSON)",
-      "url": "https://kappa-usa.com/products.json?limit=250"
-    },
-    {
-      "site": "Kappa USA - Sale (JSON)",
-      "url": "https://kappa-usa.com/collections/sale/products.json?limit=250"
-    },
-    {
-      "site": "Livestock - All Products (JSON)",
-      "url": "https://www.deadstock.ca/products.json?limit=250"
-    },
-    {
-      "site": "Union Los Angeles - All Products (JSON)",
-      "url": "https://unionlosangeles.com/products.json?limit=250"
-    },
-    {
-      "site": "Saint Alfred - All Products (JSON)",
-      "url": "https://www.saintalfred.com/products.json?limit=250"
-    },
-    {
-      "site": "Shoe Gallery - All Products (JSON)",
-      "url": "https://shoegallerymiami.com/products.json?limit=250"
-    },
-    {
-      "site": "Blends - All Products (JSON)",
-      "url": "https://www.blendsus.com/products.json?limit=250"
-    },
-    {
-      "site": "Trophy Room - All Products (JSON)",
-      "url": "https://www.trophyroomstore.com/products.json?limit=250"
-    },
-    {
-      "site": "Corporate - All Products (JSON)",
-      "url": "https://corporategotem.com/products.json?limit=250"
-    },
-    {
-      "site": "RSVP Gallery - All Products (JSON)",
-      "url": "https://rsvpgallery.com/products.json?limit=250"
-    },
-    {
-      "site": "Shoe Palace - All Products (JSON)",
-      "url": "https://www.shoepalace.com/products.json?limit=250"
-    },
-    {
-      "site": "DTLR - All Products (JSON)",
-      "url": "https://www.dtlr.com/products.json?limit=250"
-    },
-    {
-      "site": "Xhibition - All Products (JSON)",
-      "url": "https://www.xhibition.co/products.json?limit=250"
-    },
-    {
-      "site": "Oneness - All Products (JSON)",
-      "url": "https://www.onenessboutique.com/products.json?limit=250"
-    },
-    {
-      "site": "Packer Shoes - All Products (JSON)",
-      "url": "https://packershoes.com/products.json?limit=250"
-    },
-    {
-      "site": "Lapstone & Hammer - All Products (JSON)",
-      "url": "https://www.lapstoneandhammer.com/products.json?limit=250"
-    },
-    {
-      "site": "Commonwealth - All Products (JSON)",
-      "url": "https://commonwealth-ftgg.com/products.json?limit=250"
-    },
-    {
-      "site": "Bows and Arrows - All Products (JSON)",
-      "url": "https://www.bowsandarrowsberkeley.com/products.json?limit=250"
-    },
-    {
-      "site": "Darkside Initiative - All Products (JSON)",
-      "url": "https://www.thedarksideinitiative.com/products.json?limit=250"
-    },
-    {
-      "site": "Burn Rubber - All Products (JSON)",
-      "url": "https://burnrubbersneakers.com/products.json?limit=250"
-    },
-    {
-      "site": "Creme321 - All Products (JSON)",
-      "url": "https://creme321.com/products.json?limit=250"
-    },
-    {
-      "site": "Renarts - All Products (JSON)",
-      "url": "https://renarts.com/products.json?limit=250"
-    },
-    {
-      "site": "Shop Nice Kicks - All Products (JSON)",
-      "url": "https://shopnicekicks.com/products.json?limit=250"
-    },
-    {
-      "site": "Premier Store - All Products (JSON)",
-      "url": "https://thepremierstore.com/products.json?limit=250"
-    },
-    {
-      "site": "Roc City Kicks - All Products (JSON)",
-      "url": "https://www.roccitykicks.com/products.json?limit=250"
-    },
-    {
-      "site": "Stussy - All Products (JSON)",
-      "url": "https://www.stussy.com/products.json?limit=250"
-    },
-    {
-      "site": "Golf Wang - All Products (JSON)",
-      "url": "https://golfwang.com/products.json?limit=250"
-    },
-    {
-      "site": "OVO - US (JSON)",
-      "url": "https://us.octobersveryown.com/products.json?limit=250"
-    },
-    {
-      "site": "BAPE - US (JSON)",
-      "url": "https://us.bape.com/products.json?limit=250"
-    },
-    {
-      "site": "Fear of God - All Products (JSON)",
-      "url": "https://fearofgod.com/products.json?limit=250"
-    },
-    {
-      "site": "Eric Emanuel - All Products (JSON)",
-      "url": "https://ericemanuel.com/products.json?limit=250"
-    },
-    {
-      "site": "Aime Leon Dore - All Products (JSON)",
-      "url": "https://www.aimeleondore.com/products.json?limit=250"
-    },
-    {
-      "site": "JJJJound - All Products (JSON)",
-      "url": "https://www.jjjjound.com/products.json?limit=250"
-    },
-    {
-      "site": "Brain Dead - All Products (JSON)",
-      "url": "https://wearebraindead.com/products.json?limit=250"
-    },
-    {
-      "site": "Gallery Dept - All Products (JSON)",
-      "url": "https://gallerydept.com/products.json?limit=250"
-    },
-    {
-      "site": "Mattel Creations - All Products (JSON)",
-      "url": "https://creations.mattel.com/products.json?limit=250"
-    },
-    {
-      "site": "Youtooz - All Products (JSON)",
-      "url": "https://youtooz.com/products.json?limit=250"
-    },
-    {
-      "site": "Kith Toys - All Products (JSON)",
-      "url": "https://kith.com/collections/toys/products.json?limit=250"
-    }
+    { "site": "GOAT Just Dropped", "url": "https://goat.com/collections/just-dropped", "isBrowser": true },
+    { "site": "Supreme New Drops", "url": "https://us.supreme.com/collections/new", "isBrowser": true },
+    { "site": "Kith - New Arrivals (JSON)", "url": "https://kith.com/collections/new-arrivals/products.json?limit=250" },
+    { "site": "Stussy - All Products (JSON)", "url": "https://www.stussy.com/products.json?limit=250" },
+    { "site": "Travis Scott Official", "url": "https://shop.travisscott.com/" },
+    { "site": "Nike SNKRS Launch", "url": "https://www.nike.com/launch" },
+    { "site": "adidas CONFIRMED", "url": "https://www.adidas.com/us/confirmed" },
+    { "site": "Foot Locker Release Calendar", "url": "https://www.footlocker.com/release-calendar" },
+    { "site": "Finish Line Release Calendar", "url": "https://www.finishline.com/release-calendar" },
+    { "site": "Pokemon Center US", "url": "https://www.pokemoncenter.com/category/new-releases" },
+    { "site": "Pop Mart US", "url": "https://www.popmart.com/us/products" },
+    { "site": "KAWS", "url": "https://kawsone.com/" },
+    { "site": "Sp5der Worldwide", "url": "https://kingsp5der.com/" },
+    { "site": "Denim Tears", "url": "https://denimtears.com/" },
+    { "site": "Corteiz", "url": "https://www.crtz.xyz/" },
+    { "site": "Lululemon", "url": "https://shop.lululemon.com/c/accessories/_/N-1z0xcm7Z816" },
+    { "site": "Snipes USA", "url": "https://www.snipesusa.com/new-arrivals/" },
+    { "site": "SSENSE", "url": "https://www.ssense.com/en-us/men/designers/fear-of-god-essentials" },
+    { "site": "Mr Porter", "url": "https://www.mrporter.com/en-us/mens/designers/fear-of-god-essentials" },
+    { "site": "Kith - All Products (JSON)", "url": "https://kith.com/products.json?limit=250" },
+    { "site": "Kith - Footwear (JSON)", "url": "https://kith.com/collections/footwear/products.json?limit=250" },
+    { "site": "Concepts - All Products (JSON)", "url": "https://cncpts.com/products.json?limit=250" },
+    { "site": "Concepts - Footwear (JSON)", "url": "https://cncpts.com/collections/footwear/products.json?limit=250" },
+    { "site": "Concepts - New Arrivals (JSON)", "url": "https://cncpts.com/collections/new-arrivals/products.json?limit=250" },
+    { "site": "Bodega - All Products (JSON)", "url": "https://bdgastore.com/products.json?limit=250" },
+    { "site": "Bodega - Footwear (JSON)", "url": "https://bdgastore.com/collections/footwear/products.json?limit=250" },
+    { "site": "Bodega - New Arrivals (JSON)", "url": "https://bdgastore.com/collections/new-arrivals/products.json?limit=250" },
+    { "site": "A Ma Maniere - All Products (JSON)", "url": "https://www.a-ma-maniere.com/products.json?limit=250" },
+    { "site": "A Ma Maniere - Footwear (JSON)", "url": "https://www.a-ma-maniere.com/collections/footwear/products.json?limit=250" },
+    { "site": "Social Status - All Products (JSON)", "url": "https://www.socialstatuspgh.com/products.json?limit=250" },
+    { "site": "Social Status - Footwear (JSON)", "url": "https://www.socialstatuspgh.com/collections/footwear/products.json?limit=250" },
+    { "site": "APB Store - All Products (JSON)", "url": "https://www.apbstore.com/products.json?limit=250" },
+    { "site": "APB Store - Footwear (JSON)", "url": "https://www.apbstore.com/collections/footwear/products.json?limit=250" },
+    { "site": "Undefeated - All Products (JSON)", "url": "https://undefeated.com/products.json?limit=250" },
+    { "site": "Undefeated - Footwear (JSON)", "url": "https://undefeated.com/collections/footwear/products.json?limit=250" },
+    { "site": "END - All Products (JSON)", "url": "https://www.endclothing.com/us/products.json?limit=250" },
+    { "site": "DSM - All Products (JSON)", "url": "https://shop.doverstreetmarket.com/products.json?limit=250" },
+    { "site": "Extra Butter - All Products (JSON)", "url": "https://extrabutterny.com/products.json?limit=250" },
+    { "site": "Extra Butter - Footwear (JSON)", "url": "https://extrabutterny.com/collections/footwear/products.json?limit=250" },
+    { "site": "Extra Butter - New Arrivals (JSON)", "url": "https://extrabutterny.com/collections/new-arrivals/products.json?limit=250" },
+    { "site": "Extra Butter - Sale (JSON)", "url": "https://extrabutterny.com/collections/sale/products.json?limit=250" },
+    { "site": "Notre - All Products (JSON)", "url": "https://www.notre-shop.com/products.json?limit=250" },
+    { "site": "Notre - Footwear (JSON)", "url": "https://www.notre-shop.com/collections/footwear/products.json?limit=250" },
+    { "site": "Notre - New Arrivals (JSON)", "url": "https://www.notre-shop.com/collections/new-arrivals/products.json?limit=250" },
+    { "site": "Notre - Sale (JSON)", "url": "https://www.notre-shop.com/collections/sale/products.json?limit=250" },
+    { "site": "Feature - All Products (JSON)", "url": "https://feature.com/products.json?limit=250" },
+    { "site": "Feature - Footwear (JSON)", "url": "https://feature.com/collections/footwear/products.json?limit=250" },
+    { "site": "Feature - New Arrivals (JSON)", "url": "https://feature.com/collections/new-arrivals/products.json?limit=250" },
+    { "site": "Feature - Sale (JSON)", "url": "https://feature.com/collections/sale/products.json?limit=250" },
+    { "site": "Sneaker Politics - All Products (JSON)", "url": "https://sneakerpolitics.com/products.json?limit=250" },
+    { "site": "Sneaker Politics - Footwear (JSON)", "url": "https://sneakerpolitics.com/collections/footwear/products.json?limit=250" },
+    { "site": "Sneaker Politics - New Arrivals (JSON)", "url": "https://sneakerpolitics.com/collections/new-arrivals/products.json?limit=250" },
+    { "site": "Sneaker Politics - Sale (JSON)", "url": "https://sneakerpolitics.com/collections/sale/products.json?limit=250" },
+    { "site": "BBC ICECREAM - All Products (JSON)", "url": "https://bbcicecream.com/products.json?limit=250" },
+    { "site": "BBC ICECREAM - New Arrivals (JSON)", "url": "https://bbcicecream.com/collections/new-arrivals/products.json?limit=250" },
+    { "site": "BBC ICECREAM - Sale (JSON)", "url": "https://bbcicecream.com/collections/sale/products.json?limit=250" },
+    { "site": "Hat Club - All Products (JSON)", "url": "https://www.hatclub.com/products.json?limit=250" },
+    { "site": "Hat Club - New Arrivals (JSON)", "url": "https://www.hatclub.com/collections/new-arrivals/products.json?limit=250" },
+    { "site": "Kappa USA - All Products (JSON)", "url": "https://kappa-usa.com/products.json?limit=250" },
+    { "site": "Kappa USA - Sale (JSON)", "url": "https://kappa-usa.com/collections/sale/products.json?limit=250" },
+    { "site": "Livestock - All Products (JSON)", "url": "https://www.deadstock.ca/products.json?limit=250" },
+    { "site": "Union Los Angeles - All Products (JSON)", "url": "https://unionlosangeles.com/products.json?limit=250" },
+    { "site": "Saint Alfred - All Products (JSON)", "url": "https://www.saintalfred.com/products.json?limit=250" },
+    { "site": "Shoe Gallery - All Products (JSON)", "url": "https://shoegallerymiami.com/products.json?limit=250" },
+    { "site": "Blends - All Products (JSON)", "url": "https://www.blendsus.com/products.json?limit=250" },
+    { "site": "Trophy Room - All Products (JSON)", "url": "https://www.trophyroomstore.com/products.json?limit=250" },
+    { "site": "Corporate - All Products (JSON)", "url": "https://corporategotem.com/products.json?limit=250" },
+    { "site": "RSVP Gallery - All Products (JSON)", "url": "https://rsvpgallery.com/products.json?limit=250" },
+    { "site": "Shoe Palace - All Products (JSON)", "url": "https://www.shoepalace.com/products.json?limit=250" },
+    { "site": "DTLR - All Products (JSON)", "url": "https://www.dtlr.com/products.json?limit=250" },
+    { "site": "Xhibition - All Products (JSON)", "url": "https://www.xhibition.co/products.json?limit=250" },
+    { "site": "Oneness - All Products (JSON)", "url": "https://www.onenessboutique.com/products.json?limit=250" },
+    { "site": "Packer Shoes - All Products (JSON)", "url": "https://packershoes.com/products.json?limit=250" },
+    { "site": "Lapstone & Hammer - All Products (JSON)", "url": "https://www.lapstoneandhammer.com/products.json?limit=250" },
+    { "site": "Commonwealth - All Products (JSON)", "url": "https://commonwealth-ftgg.com/products.json?limit=250" },
+    { "site": "Bows and Arrows - All Products (JSON)", "url": "https://www.bowsandarrowsberkeley.com/products.json?limit=250" },
+    { "site": "Darkside Initiative - All Products (JSON)", "url": "https://www.thedarksideinitiative.com/products.json?limit=250" },
+    { "site": "Burn Rubber - All Products (JSON)", "url": "https://burnrubbersneakers.com/products.json?limit=250" },
+    { "site": "Creme321 - All Products (JSON)", "url": "https://creme321.com/products.json?limit=250" },
+    { "site": "Renarts - All Products (JSON)", "url": "https://renarts.com/products.json?limit=250" },
+    { "site": "Shop Nice Kicks - All Products (JSON)", "url": "https://shopnicekicks.com/products.json?limit=250" },
+    { "site": "Premier Store - All Products (JSON)", "url": "https://thepremierstore.com/products.json?limit=250" },
+    { "site": "Roc City Kicks - All Products (JSON)", "url": "https://www.roccitykicks.com/products.json?limit=250" },
+    { "site": "Golf Wang - All Products (JSON)", "url": "https://golfwang.com/products.json?limit=250" },
+    { "site": "OVO - US (JSON)", "url": "https://us.octobersveryown.com/products.json?limit=250" },
+    { "site": "BAPE - US (JSON)", "url": "https://us.bape.com/products.json?limit=250" },
+    { "site": "Fear of God - All Products (JSON)", "url": "https://fearofgod.com/products.json?limit=250" },
+    { "site": "Eric Emanuel - All Products (JSON)", "url": "https://ericemanuel.com/products.json?limit=250" },
+    { "site": "Aime Leon Dore - All Products (JSON)", "url": "https://www.aimeleondore.com/products.json?limit=250" },
+    { "site": "JJJJound - All Products (JSON)", "url": "https://www.jjjjound.com/products.json?limit=250" },
+    { "site": "Brain Dead - All Products (JSON)", "url": "https://wearebraindead.com/products.json?limit=250" },
+    { "site": "Gallery Dept - All Products (JSON)", "url": "https://gallerydept.com/products.json?limit=250" },
+    { "site": "Mattel Creations - All Products (JSON)", "url": "https://creations.mattel.com/products.json?limit=250" },
+    { "site": "Youtooz - All Products (JSON)", "url": "https://youtooz.com/products.json?limit=250" },
+    { "site": "Kith Toys - All Products (JSON)", "url": "https://kith.com/collections/toys/products.json?limit=250" }
   ],
   "DiscordWebhookURL": ""
 }

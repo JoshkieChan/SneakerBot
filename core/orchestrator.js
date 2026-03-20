@@ -45,6 +45,7 @@ class Orchestrator {
         this.softModeActive = false;
         this.processedSignals = new Set();
         this.notificationCount = 0;
+        this.siteFailures = new Map(); // Phase 30: Track consecutive failures
     }
 
     resetMetrics() {
@@ -145,10 +146,10 @@ class Orchestrator {
             // Limited 8s Market Data Timeout for VPS
             const marketPromise = getStockXPrice(browser, signal.product.title);
             
-            // Phase 28: Categorized Timeout
+            // Phase 30: Relaxed 12s Market Data Timeout
             signal.market.price = await Promise.race([
                 marketPromise, 
-                new Promise((_, reject) => setTimeout(() => reject(new Error('TRANSIENT_TIMEOUT')), 8000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error('TRANSIENT_TIMEOUT')), 12000))
             ]).catch(e => {
                 if (e.message.includes('TRANSIENT')) this.cycleMetrics.transientErrors++;
                 return null;
@@ -200,11 +201,11 @@ class Orchestrator {
             ] 
         });
 
-        // 60s Global Cycle Timeout
+        // Phase 30: Relaxed 120s Global Cycle Timeout
         const cycleTimeout = setTimeout(async () => {
             console.error('[WATCHDOG] Cycle timed out! Reclaiming resources.');
             await browser.close().catch(() => {});
-        }, 60000);
+        }, 120000);
 
         try {
             const allTargets = this.config.TargetURLs;
@@ -216,11 +217,19 @@ class Orchestrator {
 
             let allProducts = [];
             for (const target of batch) {
+                // Phase 30: Site-level Failure Penalty (Skip if 2+ consecutive failures)
+                const failures = this.siteFailures.get(target.site) || 0;
+                if (failures >= 2) {
+                    console.log(`[ORCHESTRATOR] Skipping ${target.site} due to persistent failures.`);
+                    continue;
+                }
+
                 try {
                     // Phase 27: Strict Sequential & Lightweight
                     if (target.url.includes('products.json')) {
                         const products = await this.scout.scanShopify(target, 'Mozilla/5.0...');
                         allProducts = allProducts.concat(products);
+                        this.siteFailures.set(target.site, 0); // Reset on success
                     } else {
                         const page = await browser.newPage();
                         // Lightweight Mode: Block heavy resources
@@ -230,13 +239,16 @@ class Orchestrator {
                             else req.continue();
                         });
 
-                        page.setDefaultNavigationTimeout(10000); // 10s page load
+                        page.setDefaultNavigationTimeout(15000); // Phase 30: 15s page load
                         const products = await this.scout.scanBrowser(target, page);
                         allProducts = allProducts.concat(products);
+                        this.siteFailures.set(target.site, 0); // Reset on success
                         await page.close();
                     }
                 } catch (e) {
                     this.cycleMetrics.transientErrors++;
+                    this.siteFailures.set(target.site, failures + 1);
+                    console.warn(`[ORCHESTRATOR] Site ${target.site} failure count: ${failures + 1}`);
                 }
             }
 

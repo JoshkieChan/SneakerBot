@@ -620,6 +620,13 @@ class Orchestrator {
                     }
 
                     const signal = await this.processProduct(product, browser);
+                    
+                    // Phase 48: Stability Hotfix (Null Guard)
+                    if (!signal || !signal.intelligence) {
+                        this.metrics.errors.transient++;
+                        continue;
+                    }
+
                     if (isRestock) {
                         signal.intelligence.score += 20;
                         signal.intelligence.tags = [...(signal.intelligence.tags || []), 'RESTOCK'];

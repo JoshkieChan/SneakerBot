@@ -2,7 +2,8 @@ services:
   validator:
     container_name: sneakerbot-validator
     build: ./validator
-    env_file: .env
+    env_file: 
+    - .env
     restart: always
 
   bot:
@@ -13,7 +14,8 @@ services:
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
-    env_file: .env
+    env_file: 
+    - .env
     environment:
       - NODE_ENV=production
     restart: always

@@ -21,8 +21,8 @@ function classifyTier(confidence) {
 }
 
 function getChannelIdForTier(tier) {
-    if (tier === "A") return process.env.CHANNEL_ID_PRIORITY;
-    if (tier === "B") return process.env.CHANNEL_ID_REVIEW;
+    if (tier === "A") return process.env.CHANNEL_ID_PRIORITY || process.env.CHANNEL_ID_MAIN;
+    if (tier === "B") return process.env.CHANNEL_ID_REVIEW || process.env.CHANNEL_ID_MAIN;
     return null; // Tier C filtered
 }
 
@@ -165,6 +165,7 @@ async function startBot() {
     // ENV AUDIT
     console.log("-----------------------------------------");
     console.log("ENV CHECK:");
+    console.log("CHANNEL_ID_MAIN:", process.env.CHANNEL_ID_MAIN ? "✅ LOADED" : "❌ MISSING");
     console.log("CHANNEL_ID_PRIORITY:", process.env.CHANNEL_ID_PRIORITY ? "✅ LOADED" : "❌ MISSING");
     console.log("CHANNEL_ID_REVIEW:", process.env.CHANNEL_ID_REVIEW ? "✅ LOADED" : "❌ MISSING");
     console.log("-----------------------------------------");
@@ -173,7 +174,7 @@ async function startBot() {
     
     client.once("ready", async () => {
         console.log(`✅ DISCORD CLIENT READY: Logged in as ${client.user.tag}`);
-        console.log(`📡 MONITORING CHANNELS: PRIORITY=${process.env.CHANNEL_ID_PRIORITY}, REVIEW=${process.env.CHANNEL_ID_REVIEW}`);
+        console.log(`📡 MONITORING: MAIN=${process.env.CHANNEL_ID_MAIN}, PRIORITY=${process.env.CHANNEL_ID_PRIORITY}, REVIEW=${process.env.CHANNEL_ID_REVIEW}`);
 
         // Start the infinite cycle loop
         while (true) {

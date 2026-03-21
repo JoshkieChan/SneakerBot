@@ -14,8 +14,10 @@ systemctl start docker
 docker container prune -f
 docker network prune -f
 
-# 5. Pull & Rebuild
-git pull origin main
-docker compose up -d --build --remove-orphans
+# 5. Pull & Rebuild Both Services
+git fetch --all && git reset --hard origin/main
+docker compose down
+docker compose build --no-cache
+docker compose up -d
 
-echo "✅ VPS RECOVERY COMPLETE. BOT IS RUNNING."
+echo "✅ HYBRID SYSTEM (BOT + VALIDATOR) IS ONLINE."

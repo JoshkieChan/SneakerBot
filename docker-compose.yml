@@ -1,19 +1,20 @@
+version: '3.8'
+
 services:
-  sneakerbot:
-    build: .
-    container_name: sneakerbot
-    restart: on-failure
-    stop_grace_period: 30s
-    env_file:
-      - .env
+  validator:
+    build: ./validator
+    container_name: validator
+    ports:
+      - "8000:8000"
+    restart: always
+
+  bot:
+    build: ./bot
+    container_name: bot
+    depends_on:
+      - validator
     volumes:
-      - ./.env:/app/.env
-      - ./config/config.json:/app/config/config.json
       - ./data:/app/data
       - ./logs:/app/logs
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10mb"
-        max-file: "3"
-
+    env_file: .env
+    restart: always

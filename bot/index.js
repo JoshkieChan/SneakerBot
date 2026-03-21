@@ -42,15 +42,19 @@ async function sendAlert(client, product, confidence) {
 
     try {
         const channel = await client.channels.fetch(channelId);
-        const alertMsg = `
+        let alertMsg = `
 🚨 **TIER ${tier} DEAL**
 
 📦 **Product:** ${product.title}
 💰 **Price:** $${product.price}
 📊 **Confidence:** ${confidence}%
-
-🔗 **Link:** ${product.url}
 `;
+
+        if (product.revenue > 0) alertMsg += `💵 **Monthly Revenue:** $${product.revenue}\n`;
+        if (product.profit > 0) alertMsg += `📈 **Monthly Profit:** $${product.profit}\n`;
+
+        alertMsg += `\n🔗 **Link:** ${product.url}`;
+        
         await channel.send(alertMsg);
         
         const loc = (tier === "A") ? "priority channel" : "review channel";
@@ -84,7 +88,9 @@ async function sendSummary(client, results) {
         topDeals.forEach((deal, index) => {
             summary += `${index + 1}. **${deal.title}**\n`;
             summary += `💰 $${deal.price} | 📊 ${deal.confidence}%\n`;
-            summary += `🔗 ${deal.url}\n\n`;
+            if (deal.revenue > 0) summary += `💵 Rev: $${deal.revenue} | `;
+            if (deal.profit > 0) summary += `📈 Prof: $${deal.profit}`;
+            summary += `\n🔗 ${deal.url}\n\n`;
         });
 
         await channel.send(summary);
@@ -115,12 +121,22 @@ async function processSignal(url) {
         const result = validation.data;
 
         if (result.approved) {
-            console.log(`✅ [APPROVED] ${product.title} (${result.confidence}%)`);
-            await sendAlert(client, product, result.confidence);
+            console.log(`✅ [APPROVED] ${product.title} (${result.confidence}%) [Tier ${result.tier}]`);
+            
+            const enrichedProduct = {
+                ...product,
+                revenue: result.monthly_revenue,
+                profit: result.monthly_profit
+            };
+            
+            await sendAlert(client, enrichedProduct, result.confidence);
+            
             return {
                 title: product.title,
                 price: product.price,
                 confidence: result.confidence,
+                revenue: result.monthly_revenue,
+                profit: result.monthly_profit,
                 url: product.url
             };
         } else {

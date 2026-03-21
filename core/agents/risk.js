@@ -7,26 +7,25 @@ class RiskAgent {
     }
 
     evaluate(signal) {
-        // 1. BILLIONAIRE PARTNER MODE: HIGH CONFIDENCE ONLY
-        if (signal.score < 60) {
-            return { valid: false, reason: 'LOW_CONFIDENCE_SCORE' };
+        // 1. SNIPER MODE: HIGH CONFIDENCE ONLY (Score >= 80)
+        if (signal.score < 80) {
+            return { valid: false, reason: 'BELOW_SNIPER_THRESHOLD' };
         }
 
-        // 2. TRANSFERABILITY (The #1 Rule)
+        // 2. MANDATORY PRICE RANGE ($25 - $1000)
+        if (signal.price < 25 || signal.price > 1000) {
+            return { valid: false, reason: 'PRICE_OUT_OF_SNIPER_RANGE' };
+        }
+
+        // 3. TRANSFERABILITY (Non-negotiable)
         if (signal.isTransferable === false) {
             return { valid: false, reason: 'NON_TRANSFERABLE' };
         }
 
-        // 3. Price Safety
-        if (signal.price > 1000) {
-            return { valid: false, reason: 'PRICE_OUT_OF_RANGE' };
-        }
-
-        // 4. Scam Detection
-        const text = (signal.title + " " + (signal.description || "")).toLowerCase();
-        const scamKeywords = ['scam', 'fake', 'hacked', 'bot generated', 'stolen'];
-        if (scamKeywords.some(kw => text.includes(kw))) {
-            return { valid: false, reason: 'SCAM_DETECTED' };
+        // 4. DEMAND VERIFICATION
+        // (Handled by score >= 80, but adding a hard check for safety)
+        if (!signal.demandSignal) {
+            return { valid: false, reason: 'NO_DEMAND_SIGNAL' };
         }
 
         return { valid: true };

@@ -12,7 +12,7 @@ class ScoutAgent {
     }
 
     async scanFlippa() {
-        console.log(`[SCOUT] Hunting Flippa (Local Chrome)...`);
+        console.log(`[SCOUT] Sniping Flippa (Local Chrome)...`);
         const browser = await puppeteer.launch({ 
             headless: "new", 
             executablePath: process.platform === 'darwin' 
@@ -25,10 +25,10 @@ class ScoutAgent {
         
         try {
             let allResults = [];
-            const keywords = ["saas", "template", "plugin", "micro-saas", "source code"];
+            const keywords = ["saas", "template", "plugin", "source code", "automation", "tool"];
             
             for (const kw of keywords) {
-                const url = `https://flippa.com/search?filter%5Bprice%5D%5Bmax%5D=1000&filter%5Bproperty_type%5D%5B%5D=website&filter%5Bstatus%5D%5B%5D=open&q=${encodeURIComponent(kw)}`;
+                const url = `https://flippa.com/search?filter%5Bprice%5D%5Bmin%5D=25&filter%5Bprice%5D%5Bmax%5D=1000&filter%5Bproperty_type%5D%5B%5D=website&filter%5Bstatus%5D%5B%5D=open&q=${encodeURIComponent(kw)}`;
                 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
                 await new Promise(r => setTimeout(r, 10000)); 
                 
@@ -66,8 +66,7 @@ class ScoutAgent {
                 allResults.push(...results);
             }
 
-            const filtered = allResults.filter(r => r.price > 0 && r.link);
-            return filtered; 
+            return allResults.filter(r => r.price >= 25 && r.link); 
         } catch (error) {
             console.error(`[SCOUT FLIPPA ERROR] ${error.message}`);
             return [];
@@ -77,7 +76,7 @@ class ScoutAgent {
     }
 
     async scanGumroad() {
-        console.log(`[SCOUT] Hunting Gumroad (Local Chrome)...`);
+        console.log(`[SCOUT] Sniping Gumroad (Local Chrome)...`);
         const browser = await puppeteer.launch({ 
             headless: "new",
             executablePath: process.platform === 'darwin' 
@@ -90,7 +89,7 @@ class ScoutAgent {
         
         try {
             let allResults = [];
-            const keywords = ["theme", "plugin", "template", "micro-SaaS", "sourcecode", "resell rights", "PLR", "lifetime deal"];
+            const keywords = ["template", "theme", "plugin", "micro SaaS", "source code", "automation", "tool", "dashboard"];
             
             for (const kw of keywords) {
                 await page.goto(`https://gumroad.com/discover?query=${encodeURIComponent(kw)}`, { waitUntil: 'domcontentloaded' });
@@ -119,8 +118,7 @@ class ScoutAgent {
                 allResults.push(...results);
             }
 
-            const filtered = allResults.filter(r => r.price > 0 && r.price <= 1000);
-            return filtered; 
+            return allResults.filter(r => r.price >= 25 && r.price <= 1000); 
         } catch (error) {
             console.error(`[SCOUT GUMROAD ERROR] ${error.message}`);
             return [];

@@ -10,46 +10,48 @@ class IntelligenceAgent {
         const text = (signal.title + " " + (signal.description || "")).toLowerCase();
         let score = 0;
 
-        // 1. PROFIT & EFFICIENCY (+65 possible)
-        if (signal.price < 300) score += 20;
-        else if (signal.price < 700) score += 10;
-
-        const revenueKeywords = ['revenue', 'mrr', 'sales', 'profit', 'earning', 'income'];
-        if (signal.revenue > 0 || revenueKeywords.some(kw => text.includes(kw))) {
-            score += 25;
-        }
-
-        const highDemand = ['saas', 'plr', 'micro-saas', 'source code', 'lifetime', 'plugin', 'theme'];
-        if (highDemand.some(kw => text.includes(kw))) {
+        // 1. Price Valid [20 pts] ($25 - $1000)
+        if (signal.price >= 25 && signal.price <= 1000) {
             score += 20;
         }
 
-        // 2. FLIP POTENTIAL (+25 possible)
-        // Short description often implies a lazy/unpolished listing = potential flip
-        if (text.length < 150) score += 15;
-        if (signal.ratingCount === 0 && text.includes('new')) score += 10;
-
-        // 3. RED FLAGS & REJECTION (-100 possible)
-        if (text.includes('personal use only') || text.includes('non-transferable') || text.includes('not for resale')) {
-            score -= 60;
-        }
-        
-        if (text.includes('vague') || text.includes('sketchy') || text.includes('low quality')) {
-            score -= 20;
+        // 2. Demand Signal [25 pts] (Reviews/Sales)
+        const demandKeywords = ['sale', 'revenue', 'mrr', 'sold', 'customer', 'user', 'purchased'];
+        if (signal.ratingCount > 0 || demandKeywords.some(kw => text.includes(kw)) || (signal.revenue && signal.revenue > 0)) {
+            score += 25;
         }
 
-        if (!text.includes('demo') && !text.includes('preview') && !text.includes('link')) {
-            score -= 10;
+        // 3. Undervalued Signals [25 pts] (Listing Quality/Positioning)
+        // Short description [10 pts]
+        if (text.length < 150) score += 10;
+        // Unpolished keywords [15 pts]
+        const unpolished = ['simple', 'starter', 'basic', 'raw', 'fixer', 'minimal'];
+        if (unpolished.some(kw => text.includes(kw))) score += 15;
+
+        // 4. Clear Flip Angle [20 pts] (Niche Clarity)
+        const niches = ['template', 'theme', 'plugin', 'micro saas', 'source code', 'automation', 'tool', 'dashboard'];
+        if (niches.some(kw => text.includes(kw))) {
+            score += 20;
         }
 
-        // Normalize to 0-100
+        // 5. No Red Flags [10 pts]
+        const redFlags = ['personal use only', 'non-transferable', 'scam', 'fake', 'hacked', 'stolen', 'PLR'];
+        const hasRedFlag = redFlags.some(kw => text.includes(kw));
+        if (!hasRedFlag) {
+            score += 10;
+        } else {
+            score -= 100; // Nuclear reject if red flag found
+        }
+
+        // Final score check
         const finalScore = Math.min(Math.max(score, 0), 100);
 
         return {
             ...signal,
             score: finalScore,
-            isTransferable: score > -30, // Rough proxy for transferability
-            confidence: `${finalScore}%`
+            isTransferable: !hasRedFlag,
+            confidence: `${finalScore}%`,
+            demandSignal: signal.ratingCount > 0 ? `${signal.ratingCount} reviews` : (signal.revenue ? 'Revenue proof' : 'Contextual sales mention')
         };
     }
 }

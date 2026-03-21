@@ -1,10 +1,6 @@
-{
-  "name": "sneakerbot-bot",
-  "version": "1.0.0",
-  "description": "Node.js scraping service",
-  "main": "index.js",
   "dependencies": {
     "axios": "^1.6.7",
+    "discord.js": "^14.14.1",
     "dotenv": "^16.4.5",
     "playwright": "^1.42.1"
   }

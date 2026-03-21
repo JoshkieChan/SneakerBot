@@ -1,9 +1,10 @@
 const axios = require('axios');
 const ScoutAgent = require('./scout');
 require('dotenv').config();
+const { Client, GatewayIntentBits } = require('discord.js');
 
 // 1. CONFIG
-const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK;
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const VALIDATOR_URL = 'http://validator:8000/validate';
 const scout = new ScoutAgent();
 
@@ -13,20 +14,30 @@ process.on("uncaughtException", err => console.error("🚨 UNCAUGHT EXCEPTION:",
 
 // 3. CORE LOGIC
 async function sendAlert(product, validation) {
-    if (!DISCORD_WEBHOOK) {
-        console.error("❌ Missing Discord Webhook URL in .env");
+    const channelId = process.env.DISCORD_CHANNEL_ID;
+    if (!channelId || !client.isReady()) {
+        console.warn("⚠️  Discord Client not ready or Channel ID missing.");
         return;
     }
 
-    const payload = {
-        content: `🚨 **HIGH-CONFIDENCE FLIP**\n\n📦 **Product:** ${product.title}\n💰 **Price:** $${product.price}\n📊 **Reviews:** ${product.ratingCount || 0}\n\n🔒 **Verified:** Passed Truth Gate\n🧠 **Confidence:** ${validation.confidence}%\n\n👉 ${product.url}`
-    };
-
     try {
-        await axios.post(DISCORD_WEBHOOK, payload);
+        const channel = await client.channels.fetch(channelId);
+        const alertMsg = `
+🚨 **HIGH-CONFIDENCE FLIP**
+
+📦 **Product:** ${product.title}
+💰 **Price:** $${product.price}
+📊 **Reviews:** ${product.ratingCount || 0}
+
+🔒 **Verified:** Passed Truth Gate
+🧠 **Confidence:** ${validation.confidence}%
+
+👉 **Link:** ${product.url}
+`;
+        await channel.send(alertMsg);
         console.log(`[MONEY] ALERT SENT: ${product.title}`);
     } catch (err) {
-        console.error("❌ DISCORD SEND ERROR:", err.message);
+        console.error("❌ DISCORD BOT SEND ERROR:", err.message);
     }
 }
 
@@ -72,7 +83,6 @@ async function runCycle() {
 
         for (const url of targetUrls) {
             await processSignal(url);
-            // Small delay to avoid hammering
             await new Promise(r => setTimeout(r, 2000));
         }
     } catch (error) {
@@ -83,10 +93,13 @@ async function runCycle() {
 }
 
 async function startBot() {
-    console.log("🚀 BOT STARTED: Playwright Sniper Mode (Webhook Alerts)");
+    console.log("🚀 BOT STARTED: Playwright Sniper Mode (Bot Token Alerts)");
     
-    if (!DISCORD_WEBHOOK) {
-        console.warn("⚠️  WARNING: DISCORD_WEBHOOK is not set. Alerts will only be logged.");
+    try {
+        await client.login(process.env.DISCORD_TOKEN);
+        console.log("✅ Discord Authentication Successful");
+    } catch (loginError) {
+        console.error("❌ DISCORD LOGIN FAILED:", loginError.message);
     }
 
     while (true) {

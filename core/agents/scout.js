@@ -15,7 +15,9 @@ class ScoutAgent {
         console.log(`[SCOUT] Hunting Flippa (Local Chrome)...`);
         const browser = await puppeteer.launch({ 
             headless: "new", 
-            executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+            executablePath: process.platform === 'darwin' 
+                ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' 
+                : (require('fs').existsSync('/usr/bin/google-chrome') ? '/usr/bin/google-chrome' : undefined),
             args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] 
         });
         const page = await browser.newPage();

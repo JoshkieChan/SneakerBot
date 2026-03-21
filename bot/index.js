@@ -21,8 +21,8 @@ function classifyTier(confidence) {
 }
 
 function getChannelIdForTier(tier) {
-    if (tier === "A") return process.env.CHANNEL_ID_PRIORITY || process.env.CHANNEL_ID_MAIN;
-    if (tier === "B") return process.env.CHANNEL_ID_REVIEW || process.env.CHANNEL_ID_MAIN;
+    if (tier === "A") return process.env.CHANNEL_ID_PRIORITY;
+    if (tier === "B") return process.env.CHANNEL_ID_REVIEW;
     return null; // Tier C filtered
 }
 
@@ -30,13 +30,13 @@ async function sendAlert(client, product, confidence) {
     const tier = classifyTier(confidence);
     
     if (tier === "C") {
-        console.log(`[FILTERED] Tier C skipped: ${product.title} (${confidence}%)`);
+        console.log(`[FILTERED] Skipped: ${product.title} (${confidence}%)`);
         return;
     }
 
     const channelId = getChannelIdForTier(tier);
     if (!channelId || !client.isReady()) {
-        console.warn(`⚠️  Missing Channel ID for Tier ${tier} or Client not ready.`);
+        console.error(`❌ [ERROR] Missing Channel ID for Tier ${tier} or Client not ready.`);
         return;
     }
 
@@ -52,7 +52,9 @@ async function sendAlert(client, product, confidence) {
 🔗 **Link:** ${product.url}
 `;
         await channel.send(alertMsg);
-        console.log(`[TIER ${tier}] Sent: ${product.title}`);
+        
+        const loc = (tier === "A") ? "priority channel" : "review channel";
+        console.log(`[TIER ${tier}] Sent to ${loc}: ${product.title}`);
     } catch (err) {
         console.error(`❌ [TIER ${tier}] SEND ERROR:`, err.message);
     }

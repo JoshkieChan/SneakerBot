@@ -1,5 +1,5 @@
 /**
- * Notification Agent: High-Impact Deal Alerts.
+ * Notification Agent: Flip Opportunity Alerts.
  */
 class NotificationAgent {
     constructor(config, client) {
@@ -16,35 +16,34 @@ class NotificationAgent {
             const channel = await this.client.channels.fetch(channelId);
             if (!channel) return;
 
-            // MANDATORY FORMAT
             const msg = `
 ----------------------------------
-🚨 **DEAL DETECTED**
+🔥 **DIGITAL FLIP OPPORTUNITY**
 
 **Title:** ${signal.title}
-**Platform:** ${signal.source}
 **Price:** $${signal.price.toFixed(2)}
+**Platform:** ${signal.source}
+**Score:** ${signal.score}/100
 
-**Estimated Resale:** $${signal.estimatedResale.toFixed(0)}
-**Estimated Profit:** $${signal.profit.toFixed(0)}
-**Score:** ${signal.score}
+**Why this is interesting:**
+1. High demand niche (${signal.source === 'Gumroad' ? 'Creator Tool' : 'SaaS'})
+2. Price is significantly below standard market value
+3. Unpolished listing indicates immediate flip potential
 
-**Why this is valuable:**
-- High liquidity in ${signal.niche} niche
-- Significant flip potential identified
-- Passing all hard security gates
+**Potential Flip Angle:**
+${signal.price < 100 ? 'Rebrand + Resell at 3-5x price' : 'Optimize SEO + Listing for passive income'}
 
 **Next Actions:**
-1. Review demo immediately
-2. Compare similar listings on ${signal.source}
-3. Post resale listing (X/Discord)
+1. Verify ownership / rights
+2. Check similar listings pricing
+3. Prepare resale positioning
 
 **Link:**
 ${signal.link}
 ----------------------------------
 `;
             await channel.send(msg);
-            console.log(`[ALERT SENT] ${signal.title} | Profit: $${signal.profit.toFixed(0)}`);
+            console.log(`[MONEY] ALERT SENT: ${signal.title}`);
         } catch (error) {
             console.error(`[NOTIFICATION ERROR] ${error.message}`);
         }

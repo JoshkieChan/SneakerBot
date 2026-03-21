@@ -1,5 +1,5 @@
 /**
- * Risk Agent: Digital Asset Hard Gate.
+ * Risk Agent: Safety & Transferability.
  */
 class RiskAgent {
     constructor(config) {
@@ -7,19 +7,21 @@ class RiskAgent {
     }
 
     evaluate(signal) {
+        // 1. TRANSFERABILITY (The #1 Rule)
+        if (signal.isTransferable === false || signal.score < 0) {
+            return { valid: false, reason: 'NON_TRANSFERABLE_OR_AUTO_REJECT' };
+        }
+
+        // 2. Price Safety
+        if (signal.price > 1000) {
+            return { valid: false, reason: 'PRICE_OUT_OF_RANGE' };
+        }
+
+        // 3. Scam Detection
         const text = (signal.title + " " + (signal.description || "")).toLowerCase();
-
-        // 1. Hard Price Filter
-        if (signal.price > 1000) return { valid: false, reason: 'PRICE_EXCEEDS_MAX' };
-
-        // 2. Demo Check
-        const hasDemo = text.includes('demo') || text.includes('preview') || text.includes('link') || text.includes('http');
-        if (!hasDemo) return { valid: false, reason: 'NO_DEMO_PREVIEW' };
-
-        // 3. Non-Transferable License Check
-        const banKeywords = ['non-transferable', 'single use only', 'cannot be resold', 'fake', 'scam'];
-        if (banKeywords.some(kw => text.includes(kw))) {
-            return { valid: false, reason: 'INVALID_LICENSE_OR_SCAM' };
+        const scamKeywords = ['scam', 'fake', 'hacked', 'bot generated'];
+        if (scamKeywords.some(kw => text.includes(kw))) {
+            return { valid: false, reason: 'SCAM_DETECTED' };
         }
 
         return { valid: true };

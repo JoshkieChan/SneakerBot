@@ -1,5 +1,5 @@
 /**
- * Risk Agent: Safety gates for Digital Arbitrage.
+ * Risk Agent: Digital Asset Hard Gate.
  */
 class RiskAgent {
     constructor(config) {
@@ -7,22 +7,19 @@ class RiskAgent {
     }
 
     evaluate(signal) {
-        const text = signal.title.toLowerCase();
+        const text = (signal.title + " " + (signal.description || "")).toLowerCase();
 
-        // 1. Missing Price Check
-        if (!signal.price || signal.price <= 0) {
-            return { valid: false, reason: 'PRICE_MISSING' };
-        }
+        // 1. Hard Price Filter
+        if (signal.price > 1000) return { valid: false, reason: 'PRICE_EXCEEDS_MAX' };
 
-        // 2. Scam Detection
-        const scamKeywords = ['scam', 'fake', 'hacked', 'method', 'free money'];
-        if (scamKeywords.some(kw => text.includes(kw))) {
-            return { valid: false, reason: 'SCAM_DETECTED' };
-        }
+        // 2. Demo Check
+        const hasDemo = text.includes('demo') || text.includes('preview') || text.includes('link') || text.includes('http');
+        if (!hasDemo) return { valid: false, reason: 'NO_DEMO_PREVIEW' };
 
-        // 3. Niche Check
-        if (signal.niche === 'General' && signal.flipScore < 60) {
-            return { valid: false, reason: 'UNKNOWN_LOW_VALUE' };
+        // 3. Non-Transferable License Check
+        const banKeywords = ['non-transferable', 'single use only', 'cannot be resold', 'fake', 'scam'];
+        if (banKeywords.some(kw => text.includes(kw))) {
+            return { valid: false, reason: 'INVALID_LICENSE_OR_SCAM' };
         }
 
         return { valid: true };

@@ -7,7 +7,7 @@ const ExecutionAgent = require('./agents/execution');
 const NotificationAgent = require('./agents/notification');
 
 /**
- * Digital Arbitrage Orchestrator: Finds underpriced digital assets.
+ * Orchestrator: Real Money Deal Machine.
  */
 class Orchestrator {
     constructor() {
@@ -20,8 +20,8 @@ class Orchestrator {
         this.exec = new ExecutionAgent(this.config);
         this.notifier = new NotificationAgent(this.config, null);
 
-        this.keywords = ["selling instagram account", "selling tiktok account", "domain for sale"];
-        this.processedSignals = new Map(); 
+        this.processedSignals = new Map();
+        this.stats = { scanned: 0, filtered: 0, valid: 0, alertsSent: 0 };
     }
 
     loadConfig() {
@@ -37,53 +37,54 @@ class Orchestrator {
     }
 
     async runCycle() {
-        console.log(`\n[ARBITRAGE] --- CYCLE START: ${new Date().toISOString()} ---`);
-        
-        try {
-            // 1. Scout raw opportunities
-            const rawSignals = await this.scout.scanX(this.keywords);
-            console.log(`[ARBITRAGE] Found ${rawSignals.length} raw opportunities.`);
+        console.log(`\n[MONEY MACHINE] --- CYCLE START: ${new Date().toISOString()} ---`);
+        this.stats = { scanned: 0, filtered: 0, valid: 0, alertsSent: 0 };
 
-            let processedSignals = [];
+        try {
+            // 1. Sourcing Phase (Flippa & Gumroad)
+            const flippaSignals = await this.scout.scanFlippa();
+            const gumroadSignals = await this.scout.scanGumroad();
+            const rawSignals = [...flippaSignals, ...gumroadSignals];
+            
+            this.stats.scanned = rawSignals.length;
+
             for (const signal of rawSignals) {
-                // 2. Intelligence
+                // 2. Intelligence (Estimation & Scoring)
                 const analyzed = this.intel.analyze(signal);
                 
-                // 3. Risk Gate
+                // 3. Risk Gate (Hard Filters)
                 const riskResult = this.risk.evaluate(analyzed);
-                if (!riskResult.valid) continue;
+                if (!riskResult.valid) {
+                    this.stats.filtered++;
+                    continue;
+                }
 
-                // 4. Execution Logic
-                const ticket = this.exec.process(analyzed);
-                processedSignals.push(ticket);
-            }
+                this.stats.valid++;
 
-            // 5. Alerting Pipeline
-            let alertsSent = 0;
-            const uniqueSignals = processedSignals.filter(s => {
-                const key = `${s.title}-${s.price}`;
-                if (this.processedSignals.has(key)) return false;
+                // 4. Execution (Thresholds)
+                const result = this.exec.process(analyzed);
+                if (result.verdict === 'DISCARD') continue;
+
+                // 5. Deduplication
+                const key = `${signal.title}-${signal.price}`;
+                if (this.processedSignals.has(key)) continue;
                 this.processedSignals.set(key, Date.now());
-                return true;
-            });
 
-            // 6. Force-Send Logic: If zero "BUY" alerts, send TOP 3 "WATCH"
-            const buys = uniqueSignals.filter(s => s.verdict === 'BUY');
-            const alertsToProcess = buys.length > 0 ? buys : uniqueSignals.slice(0, 3);
-
-            for (const alert of alertsToProcess) {
-                await this.notifier.send(alert);
-                alertsSent++;
+                // 6. Alerting (Rate Limited to 3)
+                if (this.stats.alertsSent < 3) {
+                    await this.notifier.send(analyzed);
+                    this.stats.alertsSent++;
+                }
             }
 
-            console.log(`[ARBITRAGE] Cycle complete. Alerts sent: ${alertsSent}`);
+            console.log(`[MONEY MACHINE] Stats: Scanned: ${this.stats.scanned} | Filtered: ${this.stats.filtered} | Valid: ${this.stats.valid} | Sent: ${this.stats.alertsSent}`);
         } catch (error) {
-            console.error(`[ARBITRAGE CRITICAL] Cycle crashed: ${error.message}`);
+            console.error(`[CRITICAL] Cycle Error: ${error.message}`);
         } finally {
-            // Cleanup memory (24h)
+            // Memory Cleanup (48h)
             const now = Date.now();
-            for (const [key, timestamp] of this.processedSignals.entries()) {
-                if (now - timestamp > 86400000) this.processedSignals.delete(key);
+            for (const [k, t] of this.processedSignals.entries()) {
+                if (now - t > 172800000) this.processedSignals.delete(k);
             }
         }
     }

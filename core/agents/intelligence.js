@@ -1,5 +1,5 @@
 /**
- * Intelligence Agent: Analyzes Digital Asset Niches and Flip Potential.
+ * Intelligence Agent: Resale Estimation & Scoring Machine.
  */
 class IntelligenceAgent {
     constructor(config) {
@@ -7,27 +7,44 @@ class IntelligenceAgent {
     }
 
     analyze(signal) {
-        const text = signal.title.toLowerCase();
-        
-        // 1. Niche Detection
-        let niche = 'General';
-        if (text.includes('ai') || text.includes('gpt')) niche = 'AI';
-        else if (text.includes('biz') || text.includes('business') || text.includes('saas')) niche = 'Business';
-        else if (text.includes('crypto') || text.includes('nft') || text.includes('solana')) niche = 'Crypto';
-        else if (text.includes('meme') || text.includes('joke')) niche = 'Meme';
-        else if (text.includes('instagram') || text.includes('tiktok') || text.includes('account')) niche = 'Social';
-        else if (text.includes('domain') || text.includes('.com') || text.includes('.io')) niche = 'Domain';
+        const text = (signal.title + " " + (signal.description || "")).toLowerCase();
+        const price = signal.price;
 
-        // 2. Flip Score Logic
-        let flipScore = 50;
-        if (['AI', 'Business', 'Domain'].includes(niche)) flipScore += 30;
-        if (text.includes('urgent') || text.includes('cheap') || text.includes('fire sale')) flipScore += 15;
-        if (niche === 'Meme') flipScore -= 20;
+        // 1. Niche & Sales Detection
+        let niche = 'General';
+        let hasSalesProof = text.includes('revenue') || text.includes('sales') || text.includes('profit');
+        let isHighLiquidity = text.includes('shopify') || text.includes('saas') || text.includes('ai');
+
+        if (text.includes('ai') || text.includes('gpt')) niche = 'AI';
+        else if (text.includes('shopify')) niche = 'Shopify';
+        else if (text.includes('saas') || text.includes('dashboard')) niche = 'SaaS';
+        else if (text.includes('wordpress') || text.includes('plugin')) niche = 'Web';
+
+        // 2. Resale Estimation (The Heuristic)
+        let multiplier = 2.0;
+        if (hasSalesProof) multiplier = 3.5;
+        if (isHighLiquidity) multiplier += 0.5;
+        if (text.length < 100) multiplier += 0.2; // Poor listing flip boost
+
+        const estimatedResale = price * multiplier;
+
+        // 3. Scoring System
+        let score = 0;
+        if (price < 200) score += 20;
+        if (hasSalesProof) score += 30;
+        if (isHighLiquidity) score += 15;
+        if (text.length < 150) score += 10; // "Unpolished gem" indicator
+
+        // Red Flags
+        if (!text.includes('demo') && !text.includes('preview')) score -= 25;
+        if (text.includes('vague') || text.includes('unclear')) score -= 20;
 
         return {
             ...signal,
             niche,
-            flipScore: Math.min(flipScore, 100)
+            estimatedResale,
+            profit: estimatedResale - price,
+            score: Math.min(score, 100)
         };
     }
 }

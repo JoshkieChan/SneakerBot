@@ -1,5 +1,5 @@
 /**
- * Notification Agent: Formats Digital Arbitrage Alerts.
+ * Notification Agent: High-Impact Deal Alerts.
  */
 class NotificationAgent {
     constructor(config, client) {
@@ -16,21 +16,35 @@ class NotificationAgent {
             const channel = await this.client.channels.fetch(channelId);
             if (!channel) return;
 
-            const isWatch = signal.verdict === 'WATCH';
-            const emoji = isWatch ? '👀' : '🚀';
-
+            // MANDATORY FORMAT
             const msg = `
-${emoji} **DEAL ALERT**
-Asset: ${signal.title.substring(0, 100)}...
-Price: $${signal.price}
-Niche: ${signal.niche}
-Flip Potential: ${signal.estimatedFlip}
+----------------------------------
+🚨 **DEAL DETECTED**
 
-Action: Contact seller immediately
-Link: ${signal.link}
+**Title:** ${signal.title}
+**Platform:** ${signal.source}
+**Price:** $${signal.price.toFixed(2)}
+
+**Estimated Resale:** $${signal.estimatedResale.toFixed(0)}
+**Estimated Profit:** $${signal.profit.toFixed(0)}
+**Score:** ${signal.score}
+
+**Why this is valuable:**
+- High liquidity in ${signal.niche} niche
+- Significant flip potential identified
+- Passing all hard security gates
+
+**Next Actions:**
+1. Review demo immediately
+2. Compare similar listings on ${signal.source}
+3. Post resale listing (X/Discord)
+
+**Link:**
+${signal.link}
+----------------------------------
 `;
             await channel.send(msg);
-            console.log(`[ALERT] Sent digital arbitrage signal: ${signal.niche}`);
+            console.log(`[ALERT SENT] ${signal.title} | Profit: $${signal.profit.toFixed(0)}`);
         } catch (error) {
             console.error(`[NOTIFICATION ERROR] ${error.message}`);
         }

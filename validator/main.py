@@ -73,52 +73,106 @@ def analyze_resellability(product: Product):
 
     return adjustment, None
 
+def score_flippa(product: Product):
+    print(f"[SCORE] Using Flippa Investment Logic for: {product.title}")
+    score = 70  # Base investment score
+    text = (product.title + " " + product.description).lower()
+
+    # POSITIVE SIGNALS
+    if "revenue" in text or "profit" in text:
+        print("[SCORE] +10: Revenue/Profit proof mentioned")
+        score += 10
+    if "saas" in text:
+        print("[SCORE] +15: SaaS Architecture")
+        score += 15
+    if "recurring" in text:
+        print("[SCORE] +10: Recurring Revenue potential")
+        score += 10
+    if "automation" in text or "ai" in text:
+        print("[SCORE] +5: Tech automation/AI leverage")
+        score += 5
+
+    # NEGATIVE SIGNALS
+    if "starter" in text or "beginner" in text:
+        print("[SCORE] -10: Low-barrier starter site")
+        score -= 10
+    if "no revenue" in text:
+        print("[SCORE] -20: Unset revenue status")
+        score -= 20
+
+    return score
+
+def score_gumroad(product: Product):
+    print(f"[SCORE] Using Gumroad Product Logic for: {product.title}")
+    score = 100 # Base product score
+    
+    if product.reviews < 5:
+        print("[SCORE] -20: Low community trust (<5 reviews)")
+        score -= 20
+    elif product.reviews < 10:
+        print("[SCORE] -10: Moderate community trust (<10 reviews)")
+        score -= 10
+
+    if product.price < 10:
+        print("[SCORE] -10: Low-ticket price point")
+        score -= 10
+
+    text = (product.title + " " + product.description).lower()
+    if "template" in text:
+        print("[SCORE] -10: Template product penalty")
+        score -= 10
+    if "commercial use" in text:
+        print("[SCORE] +10: Commercial utility boost")
+        score += 10
+
+    return score
+
 @app.post("/validate")
 async def validate_product(product: Product):
-    reasons = []
-    confidence = 100
-
-    # 1. DOUBLE FETCH VALIDATION
+    # 1. HARD REJECTION (Global Truth Gate)
     html1 = fetch_safe(product.url)
     if not html1:
         return {"approved": False, "confidence": 0, "reason": "Failed to fetch product pages for validation"}
 
-    # 2. LIVE HTML VALIDATION (Price & Reviews)
-    price_matches = re.findall(r'\$[\d,]+(?:\.\d+)?', html1)
-    if price_matches:
-        prices = [float(p.replace('$', '').replace(',', '')) for p in price_matches]
-        match_found = any(abs(p - product.price) / product.price <= 0.10 for p in prices)
-        if not match_found:
-            return {"approved": False, "confidence": 0, "reason": f"Price not verified on page. Scraped: {product.price}"}
-
-    # 3. SCAM DETECTION
-    scam_keywords = ["send screenshot", "gmail.com", "telegram", "@", "whatsapp", "signals", "guaranteed profit", "referral"]
-    desc_lower = product.description.lower()
-    for kw in scam_keywords:
-        if kw in desc_lower:
-            return {"approved": False, "confidence": 0, "reason": f"Scam trigger detected: {kw}"}
-
-    # 4. BASE CONFIDENCE SCORING
-    if product.reviews < 5: confidence -= 25
-    elif product.reviews < 10: confidence -= 10
-    if product.price < 10: confidence -= 15
-    if len(product.title.split()) < 3: confidence -= 10
-
-    # 5. RESALE INTELLIGENCE LAYER (New)
+    # License/Legal Check (Phase 61 Hard Blocks)
     resell_adjust, reject_reason = analyze_resellability(product)
     if reject_reason:
         return {"approved": False, "confidence": 0, "reason": reject_reason}
+
+    # 2. SOURCE DETECTION
+    url = product.url.lower()
+    if "flippa.com" in url:
+        source = "flippa"
+    elif "gumroad.com" in url:
+        source = "gumroad"
+    else:
+        source = "generic"
+
+    # 3. APPLY SOURCE-SPECIFIC SCORING
+    if source == "flippa":
+        confidence = score_flippa(product)
+        threshold = 75
+    elif source == "gumroad":
+        confidence = score_gumroad(product)
+        threshold = 80
+    else:
+        confidence = 70
+        threshold = 85
+
+    # 4. OVERLAY RESALE INTELLIGENCE (Phase 61 Soft adjustments)
+    # We apply the adjustments from Phase 61 on top of the base
+    confidence += (resell_adjust or 0)
     
-    confidence += resell_adjust
-    
-    # Final Clamp & Decision
+    # Final Clamp
     confidence = max(0, min(100, confidence))
-    approved = confidence >= 85
+    approved = confidence >= threshold
+    
+    print(f"[TRUTH GATE] Source: {source} | Confidence: {confidence}% | Threshold: {threshold}%")
     
     return {
         "approved": approved,
         "confidence": confidence,
-        "reason": "Passed Truth Gate" if approved else f"Confidence too low: {confidence}%"
+        "reason": "Passed Truth Gate" if approved else f"Confidence too low: {confidence}% (Threshold: {threshold}%)"
     }
 
 if __name__ == "__main__":

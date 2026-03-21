@@ -95,8 +95,10 @@ async function runCycle() {
 async function startBot() {
     console.log("🚀 BOT STARTED: Playwright Sniper Mode (Bot Token Alerts)");
     
+    const token = process.env.DISCORD_TOKEN || process.env.DISCORD_BOT_TOKEN;
+    
     try {
-        await client.login(process.env.DISCORD_TOKEN);
+        await client.login(token);
         console.log("✅ Discord Authentication Successful");
     } catch (loginError) {
         console.error("❌ DISCORD LOGIN FAILED:", loginError.message);

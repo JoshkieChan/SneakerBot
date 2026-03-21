@@ -3,10 +3,12 @@ require('dotenv').config();
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-console.log("🔍 Checking Discord Token...");
-console.log(`Token Prefix: ${process.env.DISCORD_TOKEN ? process.env.DISCORD_TOKEN.substring(0, 10) + "..." : "MISSING"}`);
+const token = process.env.DISCORD_TOKEN || process.env.DISCORD_BOT_TOKEN;
 
-client.login(process.env.DISCORD_TOKEN)
+console.log("🔍 Checking Discord Token...");
+console.log(`Token Prefix: ${token ? token.substring(0, 10) + "..." : "MISSING"}`);
+
+client.login(token)
     .then(() => {
         console.log("✅ SUCCESS: Token is valid!");
         process.exit(0);

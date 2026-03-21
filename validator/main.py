@@ -36,12 +36,15 @@ async def validate_product(product: Product):
         return {"approved": False, "confidence": 0, "reason": "Failed to fetch product pages for validation"}
 
     # 2. LIVE HTML VALIDATION (Price & Reviews)
-    # Simple regex fallbacks for price/reviews in HTML
+    # Search for ALL price-like strings in the HTML
     price_matches = re.findall(r'\$[\d,]+(?:\.\d+)?', html1)
     if price_matches:
-        found_price = float(price_matches[0].replace('$', '').replace(',', ''))
-        if abs(found_price - product.price) / product.price > 0.05:
-            return {"approved": False, "confidence": 0, "reason": f"Price mismatch: Scraped {product.price} vs HTML {found_price}"}
+        prices = [float(p.replace('$', '').replace(',', '')) for p in price_matches]
+        # Check if the scraped price exists (within 10% tolerance) anywhere on the page
+        match_found = any(abs(p - product.price) / product.price <= 0.10 for p in prices)
+        
+        if not match_found:
+            return {"approved": False, "confidence": 0, "reason": f"Price not verified on page. Scraped: {product.price}, Page IDs: {prices[:3]}..."}
 
     # 3. SCAM DETECTION
     scam_keywords = ["send screenshot", "gmail.com", "telegram", "@", "whatsapp", "signals", "guaranteed profit", "referral"]

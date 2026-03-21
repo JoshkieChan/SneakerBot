@@ -7,7 +7,7 @@ puppeteer.use(StealthPlugin());
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 
 async function run() {
-    console.log('--- Digital Arbitrage Profit Engine | X.com Scanner ---');
+    console.log('--- Money Extraction Machine | Phase 2 Active ---');
     
     // 1. Initialize Orchestrator
     const orchestrator = new Orchestrator();

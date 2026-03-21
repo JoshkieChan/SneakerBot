@@ -21,9 +21,9 @@ class ScoutAgent {
         const page = await browser.newPage();
         
         try {
-            // Focus on Website/SaaS under $1000
             const url = `https://flippa.com/search?filter%5Bprice%5D%5Bmax%5D=1000&filter%5Bproperty_type%5D%5B%5D=website&filter%5Bstatus%5D%5B%5D=open`;
-            await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 });
+            await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+            await page.waitForSelector('a.GTM-search-result-card', { timeout: 30000 });
             
             const results = await page.evaluate(() => {
                 const cards = Array.from(document.querySelectorAll('a.GTM-search-result-card'));
@@ -31,20 +31,16 @@ class ScoutAgent {
                     const title = c.querySelector('h6')?.innerText || '';
                     const url = c.href;
                     
-                    // Logic to extract labels (Starting Price, Net Profit, etc.)
-                    const gridItems = Array.from(c.querySelectorAll('div > div > div'));
+                    // Robust label extraction
+                    const text = c.innerText.toLowerCase();
                     let price = 0;
                     let revenue = 0;
                     
-                    gridItems.forEach(item => {
-                        const text = item.innerText.toLowerCase();
-                        if (text.includes('asking price') || text.includes('starting price')) {
-                            price = parseFloat(item.innerText.replace(/[^0-9.]/g, '')) || 0;
-                        }
-                        if (text.includes('net profit')) {
-                            revenue = parseFloat(item.innerText.replace(/[^0-9.]/g, '')) || 0;
-                        }
-                    });
+                    const priceMatch = text.match(/(starting|asking) price\s*\$?([\d,]+)/);
+                    if (priceMatch) price = parseFloat(priceMatch[2].replace(/,/g, ''));
+                    
+                    const revMatch = text.match(/net profit\s*\$?([\d,]+)/);
+                    if (revMatch) revenue = parseFloat(revMatch[1].replace(/,/g, ''));
 
                     return {
                         title,
@@ -52,7 +48,7 @@ class ScoutAgent {
                         revenue,
                         source: 'Flippa',
                         link: url,
-                        description: c.innerText.substring(0, 200),
+                        description: c.innerText.substring(0, 300),
                         timestamp: Date.now()
                     };
                 });
@@ -78,20 +74,23 @@ class ScoutAgent {
             
             for (const kw of keywords) {
                 await page.goto(`https://gumroad.com/discover?query=${encodeURIComponent(kw)}`, { waitUntil: 'networkidle2' });
+                await page.waitForTimeout(3000); // Wait for dynamic grid
+
                 const results = await page.evaluate(() => {
-                    const articles = Array.from(document.querySelectorAll('article'));
-                    return articles.map(a => {
-                        const linkEl = a.querySelector('a[href*="layout=discover"]');
-                        const priceEl = a.querySelector('.product-card__price') || a.querySelector('span[class*="badge"]');
-                        const ratingEl = Array.from(a.querySelectorAll('span')).find(s => s.innerText.includes('('));
+                    // Target links that look like products
+                    const links = Array.from(document.querySelectorAll('a[href*="/l/"]')).filter(a => a.innerText.length > 5);
+                    
+                    return links.map(l => {
+                        const container = l.closest('div') || l.parentElement;
+                        const priceEl = container.querySelector('span[class*="badge"]') || container.querySelector('div[class*="price"]');
                         
                         return {
-                            title: linkEl?.innerText || 'Unknown',
+                            title: l.innerText.split('\n')[0],
                             price: parseFloat(priceEl?.innerText.replace(/[^0-9.]/g, '') || '0'),
                             source: 'Gumroad',
-                            link: linkEl?.href || '',
-                            description: a.innerText.substring(0, 150),
-                            ratingCount: ratingEl ? parseInt(ratingEl.innerText.match(/\((\d+)\)/)?.[1] || '0') : 0,
+                            link: l.href,
+                            description: container.innerText.substring(0, 200),
+                            ratingCount: container.innerText.includes('(') ? parseInt(container.innerText.match(/\((\d+)\)/)?.[1] || '0') : 0,
                             timestamp: Date.now()
                         };
                     });

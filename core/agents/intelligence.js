@@ -10,29 +10,46 @@ class IntelligenceAgent {
         const text = (signal.title + " " + (signal.description || "")).toLowerCase();
         let score = 0;
 
-        // 1. Point System (+Values)
-        if (signal.price < 500) score += 20;
-        if (signal.revenue > 0 || text.includes('revenue') || text.includes('sales')) score += 20;
-        if (signal.ratingCount > 10 || text.includes('stars')) score += 15;
+        // 1. PROFIT & EFFICIENCY (+65 possible)
+        if (signal.price < 300) score += 20;
+        else if (signal.price < 700) score += 10;
+
+        const revenueKeywords = ['revenue', 'mrr', 'sales', 'profit', 'earning', 'income'];
+        if (signal.revenue > 0 || revenueKeywords.some(kw => text.includes(kw))) {
+            score += 25;
+        }
+
+        const highDemand = ['saas', 'plr', 'micro-saas', 'source code', 'lifetime', 'plugin', 'theme'];
+        if (highDemand.some(kw => text.includes(kw))) {
+            score += 20;
+        }
+
+        // 2. FLIP POTENTIAL (+25 possible)
+        // Short description often implies a lazy/unpolished listing = potential flip
+        if (text.length < 150) score += 15;
+        if (signal.ratingCount === 0 && text.includes('new')) score += 10;
+
+        // 3. RED FLAGS & REJECTION (-100 possible)
+        if (text.includes('personal use only') || text.includes('non-transferable') || text.includes('not for resale')) {
+            score -= 60;
+        }
         
-        const niches = ['shopify', 'notion', 'saas', 'boilerplate', 'template'];
-        if (niches.some(n => text.includes(n))) score += 10;
+        if (text.includes('vague') || text.includes('sketchy') || text.includes('low quality')) {
+            score -= 20;
+        }
 
-        // "Unpolished Gem" Flip Indicator
-        if (text.length < 150) score += 15; 
+        if (!text.includes('demo') && !text.includes('preview') && !text.includes('link')) {
+            score -= 10;
+        }
 
-        // 2. Red Flags (-Values)
-        if (text.includes('vague') || text.includes('sketchy')) score -= 20;
-        if (!text.includes('demo') && !text.includes('preview')) score -= 10;
-
-        // 3. AUTO-REJECT LOGIC (Handled here or in Risk)
-        let isTransferable = !text.includes('personal license only') && !text.includes('not transferable');
-        if (!isTransferable) score = -100;
+        // Normalize to 0-100
+        const finalScore = Math.min(Math.max(score, 0), 100);
 
         return {
             ...signal,
-            score: Math.max(score, 0),
-            isTransferable
+            score: finalScore,
+            isTransferable: score > -30, // Rough proxy for transferability
+            confidence: `${finalScore}%`
         };
     }
 }

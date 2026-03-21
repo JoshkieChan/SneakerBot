@@ -7,19 +7,24 @@ class RiskAgent {
     }
 
     evaluate(signal) {
-        // 1. TRANSFERABILITY (The #1 Rule)
-        if (signal.isTransferable === false || signal.score < 0) {
-            return { valid: false, reason: 'NON_TRANSFERABLE_OR_AUTO_REJECT' };
+        // 1. BILLIONAIRE PARTNER MODE: HIGH CONFIDENCE ONLY
+        if (signal.score < 60) {
+            return { valid: false, reason: 'LOW_CONFIDENCE_SCORE' };
         }
 
-        // 2. Price Safety
+        // 2. TRANSFERABILITY (The #1 Rule)
+        if (signal.isTransferable === false) {
+            return { valid: false, reason: 'NON_TRANSFERABLE' };
+        }
+
+        // 3. Price Safety
         if (signal.price > 1000) {
             return { valid: false, reason: 'PRICE_OUT_OF_RANGE' };
         }
 
-        // 3. Scam Detection
+        // 4. Scam Detection
         const text = (signal.title + " " + (signal.description || "")).toLowerCase();
-        const scamKeywords = ['scam', 'fake', 'hacked', 'bot generated'];
+        const scamKeywords = ['scam', 'fake', 'hacked', 'bot generated', 'stolen'];
         if (scamKeywords.some(kw => text.includes(kw))) {
             return { valid: false, reason: 'SCAM_DETECTED' };
         }

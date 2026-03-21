@@ -74,7 +74,7 @@ class ScoutAgent {
             
             for (const kw of keywords) {
                 await page.goto(`https://gumroad.com/discover?query=${encodeURIComponent(kw)}`, { waitUntil: 'networkidle2' });
-                await page.waitForTimeout(3000); // Wait for dynamic grid
+                await new Promise(r => setTimeout(r, 3000)); // Wait for dynamic grid
 
                 const results = await page.evaluate(() => {
                     // Target links that look like products

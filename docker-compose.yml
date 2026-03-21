@@ -1,20 +1,19 @@
-version: '3.8'
-
 services:
   validator:
+    container_name: sneakerbot-validator
     build: ./validator
-    container_name: validator
-    ports:
-      - "8000:8000"
+    env_file: .env
     restart: always
 
   bot:
+    container_name: sneakerbot-bot
     build: ./bot
-    container_name: bot
     depends_on:
       - validator
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
     env_file: .env
+    environment:
+      - NODE_ENV=production
     restart: always

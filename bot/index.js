@@ -158,27 +158,41 @@ async function runCycle() {
     console.log("=== CYCLE COMPLETE ===\n");
 }
 
+// 5. STARTUP & INITIALIZATION
 async function startBot() {
-    console.log("🚀 BOT STARTED: Playwright Sniper Mode (Tiered Alerts)");
+    console.log("🚀 INITIALIZING SNIPER BOT...");
     
+    // ENV AUDIT
+    console.log("-----------------------------------------");
+    console.log("ENV CHECK:");
+    console.log("CHANNEL_ID_PRIORITY:", process.env.CHANNEL_ID_PRIORITY ? "✅ LOADED" : "❌ MISSING");
+    console.log("CHANNEL_ID_REVIEW:", process.env.CHANNEL_ID_REVIEW ? "✅ LOADED" : "❌ MISSING");
+    console.log("-----------------------------------------");
+
     const token = process.env.DISCORD_TOKEN || process.env.DISCORD_BOT_TOKEN;
     
+    client.once("ready", async () => {
+        console.log(`✅ DISCORD CLIENT READY: Logged in as ${client.user.tag}`);
+        console.log(`📡 MONITORING CHANNELS: PRIORITY=${process.env.CHANNEL_ID_PRIORITY}, REVIEW=${process.env.CHANNEL_ID_REVIEW}`);
+
+        // Start the infinite cycle loop
+        while (true) {
+            try {
+                await runCycle();
+            } catch (err) {
+                console.error("🚨 CRITICAL CYCLE ERROR:", err.message);
+            }
+
+            console.log("⏳ Cycle complete. Sleeping for 10 minutes...");
+            await new Promise(resolve => setTimeout(resolve, 600000));
+        }
+    });
+
     try {
         await client.login(token);
-        console.log("✅ Discord Authentication Successful");
     } catch (loginError) {
         console.error("❌ DISCORD LOGIN FAILED:", loginError.message);
-    }
-
-    while (true) {
-        try {
-            await runCycle();
-        } catch (err) {
-            console.error("CRITICAL ERROR:", err.message);
-        }
-
-        console.log("Sleeping for 10 minutes...");
-        await new Promise(resolve => setTimeout(resolve, 600000));
+        process.exit(1); 
     }
 }
 

@@ -16,6 +16,6 @@ docker network prune -f
 
 # 5. Pull & Rebuild
 git pull origin main
-docker-compose up -d --build --remove-orphans
+docker compose up -d --build --remove-orphans
 
 echo "✅ VPS RECOVERY COMPLETE. BOT IS RUNNING."

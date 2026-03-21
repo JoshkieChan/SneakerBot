@@ -170,7 +170,15 @@ async function startBot() {
     console.log("CHANNEL_ID_REVIEW:", process.env.CHANNEL_ID_REVIEW ? "✅ LOADED" : "❌ MISSING");
     console.log("-----------------------------------------");
 
-    const token = process.env.DISCORD_TOKEN || process.env.DISCORD_BOT_TOKEN;
+    const rawToken = process.env.DISCORD_TOKEN || process.env.DISCORD_BOT_TOKEN;
+    const token = rawToken ? rawToken.trim() : null;
+
+    if (!token) {
+        console.error("❌ ERROR: No Discord Token found in environment!");
+        process.exit(1);
+    }
+
+    console.log(`🔍 Token Debug: Length=${token.length}, Prefix=${token.substring(0, 10)}...`);
     
     client.once("ready", async () => {
         console.log(`✅ DISCORD CLIENT READY: Logged in as ${client.user.tag}`);

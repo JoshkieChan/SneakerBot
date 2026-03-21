@@ -1,135 +1,34 @@
 /**
- * Intelligence Agent: Performs Scoring, Applies Keyword Tiers,
- * and evaluates Resale/Size/Liquidity potential.
+ * Intelligence Agent: Analyzes Digital Asset Niches and Flip Potential.
  */
 class IntelligenceAgent {
     constructor(config) {
         this.config = config;
     }
 
-    async analyze(signal) {
-        try {
-            console.log(`[INTELLIGENCE] Analyzing: ${signal.product.title}...`);
-            
-            let score = 50; // Base score
-            const tiers = this.config.EliteKeywordTiers || {};
-            
-            // 1. Keyword Tier Scoring
-            let matchedTier = null;
-            for (const [tierName, tierData] of Object.entries(tiers)) {
-                const match = tierData.keywords && tierData.keywords.find(k => {
-                    const regex = new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-                    return regex.test(signal.product.title);
-                });
-                if (match) {
-                    matchedTier = tierName;
-                    score += (tierData.weight || 0);
-                    break;
-                }
-            }
+    analyze(signal) {
+        const text = signal.title.toLowerCase();
+        
+        // 1. Niche Detection
+        let niche = 'General';
+        if (text.includes('ai') || text.includes('gpt')) niche = 'AI';
+        else if (text.includes('biz') || text.includes('business') || text.includes('saas')) niche = 'Business';
+        else if (text.includes('crypto') || text.includes('nft') || text.includes('solana')) niche = 'Crypto';
+        else if (text.includes('meme') || text.includes('joke')) niche = 'Meme';
+        else if (text.includes('instagram') || text.includes('tiktok') || text.includes('account')) niche = 'Social';
+        else if (text.includes('domain') || text.includes('.com') || text.includes('.io')) niche = 'Domain';
 
-            // 2. Market Data Analysis (Phase 39/43: Realism & Modeling)
-            const market = signal.market || {};
-            let resaleConfidence = signal.market.isModelEstimated ? 'MODEL_ESTIMATED' : 
-                                   (signal.market.isEstimated ? 'ESTIMATED' : 
-                                   (market.hasSoldData ? 'HIGH' : 'LOW'));
-            
-            if (!market.hasListings && !market.hasSoldData && !signal.market.isModelEstimated) resaleConfidence = 'NONE';
-            
-            if (resaleConfidence === 'HIGH') {
-                score += 20;
-            } else if (['LOW', 'ESTIMATED', 'MODEL_ESTIMATED'].includes(resaleConfidence)) {
-                score -= 10;
-            }
+        // 2. Flip Score Logic
+        let flipScore = 50;
+        if (['AI', 'Business', 'Domain'].includes(niche)) flipScore += 30;
+        if (text.includes('urgent') || text.includes('cheap') || text.includes('fire sale')) flipScore += 15;
+        if (niche === 'Meme') flipScore -= 20;
 
-            // 3. Category & Alpha Filtering (Phase 42/45.2: Quality Control)
-            const titleLower = signal.product.title.toLowerCase();
-            const genericTerms = (this.config.EliteNegativeKeywords || []).map(k => k.toLowerCase()).slice(0, 10); // Use top negative keywords
-            const isGeneric = genericTerms.some(term => titleLower.includes(term));
-            
-            // Scarcity Boost: XL/XXL Outerwear
-            const isOuterwear = ['jacket', 'hoodie', 'outerwear', 'coat'].some(cat => titleLower.includes(cat));
-            const isScareSize = ['xl', 'xxl', '2xl'].some(s => titleLower.includes(s));
-            
-            if (isOuterwear && isScareSize) {
-                score += 10;
-            } else if (isGeneric && !matchedTier) {
-                score -= 15;
-            }
-
-            // 4. Hype & Liquidity Activation (Phase 42/46)
-            let liquidity = 'LOW';
-            const tier1Brands = ['nike', 'jordan', 'supreme', 'travis', 'adidas', 'yeezy'];
-            const tier2Brands = ['stussy', 'kith', 'ald', 'aimé leon dore', 'palace', 'engineered garments'];
-            
-            const isTier1 = tier1Brands.some(b => titleLower.includes(b)) || matchedTier === 'Tier1';
-            const isTier2 = tier2Brands.some(b => titleLower.includes(b)) || matchedTier === 'Tier2';
-            const isCollab = signal.product.title.includes(' x ') || signal.product.title.includes(' / ');
-
-            // Phase 48: Time Decay Filter (High Impact, Low Cost)
-            const publishedAt = signal.product.published_at ? new Date(signal.product.published_at) : null;
-            const hoursSinceDrop = (publishedAt && !isNaN(publishedAt.getTime())) ? (Date.now() - publishedAt.getTime()) / (1000 * 60 * 60) : -1;
-
-            if (hoursSinceDrop > 120) {
-                console.log(`[EARLY ENGINE] HARD SKIP: Product age (${hoursSinceDrop.toFixed(1)}h) exceeds 120h threshold.`);
-                signal.rejectionReason = 'TIME_DECAY_SKIP';
-                return null; 
-            } else if (hoursSinceDrop > 48) {
-                console.log(`[EARLY ENGINE] PENALTY (-25): Product age (${hoursSinceDrop.toFixed(1)}h) exceeds 48h window.`);
-                score -= 25;
-            }
-
-            // Phase 48: Collab + Hype Detection Boost
-            const hasCollab = titleLower.includes(' x ') || titleLower.includes('&');
-            let tier1Matches = 0;
-            tier1Brands.forEach(b => { if (titleLower.includes(b)) tier1Matches++; });
-
-            if (hasCollab || tier1Matches >= 2) {
-                console.log(`[HYPE ENGINE] COLLAB/COMBO BOOST (+15) for ${signal.product.title}`);
-                score += 15;
-            }
-
-            // Phase 46: Early Alpha Boost
-            if (signal.intelligence.earlySignal && (isTier1 || isTier2) && matchedTier) {
-                console.log(`[EARLY ENGINE] Alpha Boost (+20) for ${signal.product.title}`);
-                score += 20;
-            }
-
-            if (isTier1 || (isTier2 && isCollab)) {
-                liquidity = 'HIGH';
-                score += 15; // Hype Boost
-            } else if (isTier2) {
-                liquidity = 'MEDIUM';
-                score += 5;
-            }
-
-            // Phase 39/42/46: Scoring Intelligence Caps
-            const isEarly = signal.intelligence.earlySignal;
-            if (resaleConfidence === 'NONE' && !isEarly) score = Math.min(score, 60);
-            if (resaleConfidence === 'MODEL_ESTIMATED' && !isEarly) score = Math.min(score, 60);
-            if (resaleConfidence === 'ESTIMATED' && !isEarly) score = Math.min(score, 65);
-            if (resaleConfidence === 'LOW' && !isEarly) score = Math.min(score, 70);
-
-            // Phase 31: Scavenger Mode Penalty (-15)
-            if (signal.product.isFallback) {
-                score -= 15;
-            }
-
-            signal.intelligence = {
-                ...signal.intelligence,
-                score: Math.max(0, Math.min(100, score)),
-                matchedTier,
-                resaleConfidence,
-                liquidity,
-                brandStrength: matchedTier ? 'HIGH' : 'MEDIUM'
-            };
-
-            return signal;
-        } catch (error) {
-            console.error(`[INTELLIGENCE ERROR] ${error.message}`);
-            signal.intelligence = { score: 0, status: 'ERROR' };
-            return signal;
-        }
+        return {
+            ...signal,
+            niche,
+            flipScore: Math.min(flipScore, 100)
+        };
     }
 }
 

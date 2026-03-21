@@ -4,180 +4,24 @@ const ScoutAgent = require('./agents/scout');
 const IntelligenceAgent = require('./agents/intelligence');
 const RiskAgent = require('./agents/risk');
 const ExecutionAgent = require('./agents/execution');
-const LoggingAgent = require('./agents/logging');
 const NotificationAgent = require('./agents/notification');
-const { getStockXPrice } = require('../skills/market_data');
-
-const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /**
- * System Orchestrator: Coordinates specialized agents, enforces architecture,
- * and ensures scalable, production-grade execution.
+ * Digital Arbitrage Orchestrator: Finds underpriced digital assets.
  */
 class Orchestrator {
     constructor() {
         this.configPath = path.join(__dirname, '../config/config.json');
         this.loadConfig();
         
-        // Initialize Agents
         this.scout = new ScoutAgent(this.config, this);
         this.intel = new IntelligenceAgent(this.config);
         this.risk = new RiskAgent(this.config);
         this.exec = new ExecutionAgent(this.config);
-        this.logger = new LoggingAgent(this.config);
         this.notifier = new NotificationAgent(this.config, null);
 
-        // System Health Check
-        this.validateConfig();
-
-        // Phase 25/27: Observability & Resource Guard
-        this.cycleMetrics = {
-            startTime: null,
-            signalsFound: 0,
-            signalsProcessed: 0,
-            decisions: { 'STRONG BUY': 0, 'BUY SMALL': 0, 'WATCH': 0, 'SKIP': 0 },
-            errors: []
-        };
-
-        // Phase 27: Persistent Batch State
-        this.batchPointer = 0;
-        this.batchSize = 24; // Phase 34: Scaled for Hetzner Dedicated CPU
-        // Phase 28: Signal Quality Feedback Loop
-        this.emptyCycleCount = 0;
-        this.siteFailures = new Map(); // Phase 30: Track consecutive failures
-        this.isShuttingDown = false; // Phase 33: Global Shutdown Flag
-        this.processedSignals = new Map(); // Phase 31: Persistent Deduplication (24h)
-        this.notificationCount = 0;
-        this.tradeHistory = this.loadTradeHistory(); // Phase 48: Restock Tracking
-
-        // Phase 35: Standardized Metrics Initialization
-        this.metrics = {
-            signalsFound: 0,
-            signalsProcessed: 0,
-            strongBuy: 0,
-            buySmall: 0,
-            watch: 0,
-            errors: {
-                transient: 0,
-                critical: 0
-            }
-        };
-
-        // Phase 33: Global Process Resilience
-        process.on('unhandledRejection', (reason, promise) => {
-            console.error('[CRITICAL] Unhandled Rejection at:', promise, 'reason:', reason);
-            // Do not exit
-        });
-        process.on('uncaughtException', (err) => {
-            console.error('[CRITICAL] Uncaught Exception:', err);
-            // Do not exit
-        });
-    }
-
-    resetMetrics() {
-        // Phase 35: Defensive Metrics Guard & Debug Logging
-        console.log(`[DEBUG] Metrics State: ${JSON.stringify(this.metrics || {})}`);
-        if (!this.metrics) {
-            this.metrics = { signalsFound: 0, signalsProcessed: 0, strongBuy: 0, buySmall: 0, watch: 0, errors: { transient: 0, critical: 0 }};
-        }
-        this.metrics.errors = this.metrics.errors || { transient: 0, critical: 0 };
-
-        this.notificationCount = 0;
-        
-        // Phase 31: 24-Hour Persistent Deduplication Cleanup
-        const now = Date.now();
-        const signals = this.processedSignals || new Map();
-        for (const [key, timestamp] of (signals.entries ? signals.entries() : [])) {
-            if (now - timestamp > 24 * 60 * 60 * 1000) {
-                signals.delete(key);
-            }
-        }
-
-        this.cycleMetrics = {
-            startTime: new Date(),
-            signalsFound: 0,
-            signalsProcessed: 0,
-            decisions: { 'STRONG BUY': 0, 'BUY SMALL': 0, 'WATCH': 0, 'SKIP': 0 },
-            transientErrors: 0,
-            criticalErrors: 0,
-            topRejected: [],
-            topWatch: [],
-            topActionable: [],
-            earlySignalsInCycle: 0,
-            rejections: { time: 0, profit: 0, demand: 0, tier: 0, blocklist: 0 },
-            keywordTracker: {},
-            dataStats: { sold: 0, listings: 0 }
-        };
-    }
-
-    async sendHeartbeat(status = 'START') {
-        const timestamp = new Date().toISOString();
-        if (status === 'START') {
-            const modeLabel = this.softModeActive ? ' [SOFT MODE ACTIVE]' : ' [HETZNER PERFORMANCE MODE]';
-            console.log(`\n[${timestamp}] --- CYCLE START (Batch: ${this.batchPointer})${modeLabel} ---`);
-        } else {
-            const m = this.cycleMetrics;
-            console.log(`\n[${timestamp}] --- CYCLE REPORT [HETZNER] ---`);
-            console.log(`- Batch Pointer: ${this.batchPointer}`);
-            console.log(`- Signals Found: ${m.signalsFound}`);
-            console.log(`- Signals Processed: ${m.signalsProcessed}`);
-            console.log(`- STRONG BUY: ${m.decisions['STRONG BUY'] || 0} | BUY SMALL: ${m.decisions['BUY SMALL'] || 0}`);
-            console.log(`- WATCH: ${m.decisions['WATCH'] || 0}`);
-            console.log(`- TRANSIENT Errors: ${m.transientErrors}`);
-            console.log(`- CRITICAL Errors: ${m.criticalErrors}`);
-            console.log(`- Alerts Sent: ${this.notificationCount}`);
-            
-            if (m.dataStats) {
-                const total = m.signalsProcessed || 1;
-                console.log(`- Data Quality: Sold ${(m.dataStats.sold/total*100).toFixed(1)}% | Listings ${(m.dataStats.listings/total*100).toFixed(1)}%`);
-            }
-
-            console.log('\n[REJECTION SUMMARY]');
-            console.log(`- Time Filter: ${m.rejections.time}`);
-            console.log(`- Profit Fail: ${m.rejections.profit}`);
-            console.log(`- No Demand: ${m.rejections.demand}`);
-            console.log(`- Tier Skipped: ${m.rejections.tier}`);
-            console.log(`- Blocklisted: ${m.rejections.blocklist}`);
-
-            if (m.topActionable && m.topActionable.length > 0) {
-                console.log('\n[TOP 5 ACTIONABLE SIGNALS]');
-                m.topActionable.slice(0, 5).forEach(s => {
-                    const profit = s.risk?.worstCaseProfit || 0;
-                    console.log(`- ${s.product.title} | Score: ${s.intelligence.score} | Est. Profit: $${profit.toFixed(2)}`);
-                });
-            }
-
-            if (m.topRejected && m.topRejected.length > 0) {
-                console.log('\n[TOP REJECTED SIGNALS]');
-                m.topRejected.slice(0, 3).forEach(s => console.log(`- ${s.product.title}: ${s.execution?.reason || 'Unknown'}`));
-            }
-            
-            if (m.signalsFound === 0) console.log('\nNo valid signals this cycle');
-            console.log('----------------------------\n');
-        }
-    }
-
-    validateConfig() {
-        console.log('[ORCHESTRATOR] Running System Health Check...');
-        const required = ['EliteKeywordTiers', 'TargetURLs', 'MaxCapitalPerTradePercent'];
-        for (const key of required) {
-            if (!this.config[key] || (Array.isArray(this.config[key]) && this.config[key].length === 0)) {
-                console.error(`[CRITICAL] Missing or empty config key: ${key}`);
-                process.exit(1);
-            }
-        }
-        // Force Survival Interval
-        if (!this.config.CheckIntervalMinutes || this.config.CheckIntervalMinutes < 20) {
-            console.log('[PERFORMANCE] Normalizing CheckIntervalMinutes to 20 for VPS survival.');
-            this.config.CheckIntervalMinutes = 20;
-        }
-        console.log('✅ Config Integrity Verified');
-    }
-
-    validateSignal(signal) {
-        if (!signal.product.title || isNaN(signal.product.price) || signal.product.price <= 0) {
-            throw new Error('INVALID_SIGNAL_DATA');
-        }
+        this.keywords = ["selling instagram account", "selling tiktok account", "domain for sale"];
+        this.processedSignals = new Map(); 
     }
 
     loadConfig() {
@@ -192,560 +36,55 @@ class Orchestrator {
         this.notifier.client = client;
     }
 
-    async processProduct(rawProduct, browser) {
-        // Phase 1: Data Validity Gate (Phase 37)
-        const price = rawProduct.price;
-        const hasRetail = price && !isNaN(price) && price > 0;
-        if (!hasRetail) return null;
-
-        const signalKey = `${rawProduct.title}-${rawProduct.price}`;
-        if (this.processedSignals.has(signalKey)) return null;
+    async runCycle() {
+        console.log(`\n[ARBITRAGE] --- CYCLE START: ${new Date().toISOString()} ---`);
         
-        this.processedSignals.set(signalKey, 0); 
-        this.cycleMetrics.signalsProcessed++;
-        
-        let signal = {
-            tradeId: `T-${Date.now()}-${Math.floor(Math.random()*1000)}`,
-            userId: 'default',
-            sessionId: 'default',
-            timestamp: new Date().toISOString(),
-            product: rawProduct,
-            market: { price: null }, 
-            intelligence: { softMode: this.softModeActive },
-            risk: {},
-            execution: {},
-            logging: {},
-            diagnostics: { anomalies: [] }
-        };
-
         try {
-            this.validateSignal(signal);
+            // 1. Scout raw opportunities
+            const rawSignals = await this.scout.scanX(this.keywords);
+            console.log(`[ARBITRAGE] Found ${rawSignals.length} raw opportunities.`);
 
-            // Phase 33: Pass orchestrator for shutdown resilience
-            const marketPromise = getStockXPrice(browser, signal.product.title, this);
-            
-            // Phase 30: Relaxed 12s Market Data Timeout
-            signal.market.price = await Promise.race([
-                marketPromise, 
-                new Promise((_, reject) => setTimeout(() => reject(new Error('TRANSIENT_TIMEOUT')), 12000))
-            ]).catch(e => {
-                if (e.message.includes('TRANSIENT')) this.cycleMetrics.transientErrors++;
-                return null;
+            let processedSignals = [];
+            for (const signal of rawSignals) {
+                // 2. Intelligence
+                const analyzed = this.intel.analyze(signal);
+                
+                // 3. Risk Gate
+                const riskResult = this.risk.evaluate(analyzed);
+                if (!riskResult.valid) continue;
+
+                // 4. Execution Logic
+                const ticket = this.exec.process(analyzed);
+                processedSignals.push(ticket);
+            }
+
+            // 5. Alerting Pipeline
+            let alertsSent = 0;
+            const uniqueSignals = processedSignals.filter(s => {
+                const key = `${s.title}-${s.price}`;
+                if (this.processedSignals.has(key)) return false;
+                this.processedSignals.set(key, Date.now());
+                return true;
             });
 
-            // Phase 43: Price Intelligence Engine (Fallback Simulation)
-            if (!signal.market.price) {
-                const retail = signal.product.price;
-                const titleLower = signal.product.title.toLowerCase();
-                
-                // 1. Category Multipliers
-                let multiplier = 1.15; // Default safe multiplier
-                if (titleLower.includes('shoe') || titleLower.includes('sneaker')) multiplier = 1.25;
-                else if (titleLower.includes('jacket') || titleLower.includes('hoodie')) multiplier = 1.20;
-                else if (titleLower.includes('tee') || titleLower.includes('shirt')) multiplier = 1.10;
-                else if (['bag', 'belt', 'accessory', 'hat'].some(c => titleLower.includes(c))) multiplier = 1.05;
+            // 6. Force-Send Logic: If zero "BUY" alerts, send TOP 3 "WATCH"
+            const buys = uniqueSignals.filter(s => s.verdict === 'BUY');
+            const alertsToProcess = buys.length > 0 ? buys : uniqueSignals.slice(0, 3);
 
-                // 2. Brand Boosts
-                let brandBoost = 0;
-                const tier1 = ['nike', 'jordan', 'supreme', 'travis', 'yeezy'];
-                const tier2 = ['stussy', 'kith', 'ald', 'palace'];
-                if (tier1.some(b => titleLower.includes(b))) brandBoost = 0.10;
-                else if (tier2.some(b => titleLower.includes(b))) brandBoost = 0.05;
-
-                // 3. Hype Keyword Boost
-                const eliteKeywords = ['collab', 'limited', 'unreleased', 'sample', 'travis', 'virgil'];
-                const hypeBoost = eliteKeywords.some(k => titleLower.includes(k)) ? 0.10 : 0;
-
-                // 4. Size Scarcity Boost
-                const isLargeSize = ['xl', 'xxl', '2xl'].some(s => titleLower.includes(` ${s} `) || titleLower.endsWith(` ${s}`));
-                const sizeBoost = isLargeSize ? 0.05 : 0;
-
-                // Final Model Calculation
-                const totalMultiplier = multiplier + brandBoost + hypeBoost + sizeBoost;
-                signal.market.price = retail * totalMultiplier;
-                signal.market.isModelEstimated = true;
-                signal.market.resaleConfidence = 'MODEL_ESTIMATED';
-
-                console.log(`[PRICE MODEL] ${signal.product.title.slice(0, 25)}... | Base: ${multiplier.toFixed(2)} | Brand: +${brandBoost.toFixed(2)} | Hype: +${hypeBoost.toFixed(2)} | Size: +${sizeBoost.toFixed(2)} | Final Est: $${signal.market.price.toFixed(2)}`);
-            } else {
-                signal.market.isModelEstimated = false;
+            for (const alert of alertsToProcess) {
+                await this.notifier.send(alert);
+                alertsSent++;
             }
 
-            // Phase 46/47: Early Signal Integrity Enforcer
-            const EARLY_WINDOW_HOURS = 6;
-            const publishedAt = signal.product.published_at ? new Date(signal.product.published_at) : null;
-            const hoursSinceDrop = (publishedAt && !isNaN(publishedAt)) ? (Date.now() - publishedAt) / (1000 * 60 * 60) : null;
-            
-            let isEarly = false;
-            let earlyReason = "Standard Market";
-
-            if (hoursSinceDrop === null) {
-                earlyReason = "Unknown Age/No Timestamp";
-            } else if (hoursSinceDrop > EARLY_WINDOW_HOURS) {
-                earlyReason = `Too Old (${hoursSinceDrop.toFixed(1)}h)`;
-            } else {
-                isEarly = true;
-                earlyReason = `Valid Window (${hoursSinceDrop.toFixed(1)}h)`;
-            }
-
-            signal.intelligence.earlySignal = isEarly;
-            
-            console.log(`[EARLY ENGINE]
-- Product: ${signal.product.title}
-- Early: ${isEarly.toString().toUpperCase()}
-- Reason: ${earlyReason}`);
-
-            // Phase 37/39/43: Data Quality Detection for Summary
-            const hasSold = signal.market.hasSoldData;
-            const hasListings = signal.market.hasListings;
-            // Phase 39: Map correctly
-            if (hasSold) {
-                signal.market.resaleConfidence = 'HIGH';
-                signal.market.isModelEstimated = false;
-            }
-            
-            if (hasSold) this.cycleMetrics.dataStats.sold++;
-            else if (hasListings) this.cycleMetrics.dataStats.listings++;
-
-            // Phase 36: Guaranteed Agent Resilience
-            try {
-                signal = await this.intel.analyze(signal);
-                signal = await this.risk.assess(signal);
-                signal = await this.exec.decide(signal);
-                signal = await this.logger.persist(signal);
-            } catch (agentErr) {
-                console.error(`[ORCHESTRATOR] Agent Error (Transient): ${agentErr.message}`);
-                this.cycleMetrics.transientErrors++;
-                return null;
-            }
-
-            const verdict = signal.execution.verdict;
-            
-            // Phase 39: Profit Debug Loop
-            console.log(`[PROFIT DEBUG] ${signal.product.title.slice(0, 30)}... | Retail: $${signal.product.price} | Resale: $${signal.market.price || 'N/A'} | True: $${signal.risk.trueProfit?.toFixed(2)} | WorstCase: $${signal.risk.worstCaseProfit?.toFixed(2)} | Verdict: ${verdict}`);
-
-            // Phase 36: Track for Logging Summary
-            if (verdict === 'SKIP' || verdict === 'ERROR') {
-                this.cycleMetrics.topRejected.push(signal);
-            } else if (verdict === 'WATCH') {
-                this.cycleMetrics.topWatch.push(signal);
-            }
-
-            // Phase 31/36: Persistent Deduplication & Alerting
-            if (['STRONG BUY', 'BUY SMALL', 'WATCH'].includes(verdict)) {
-                const signalKey = `${signal.product.title}-${signal.product.price}`;
-                const alertedAt = this.processedSignals.get(signalKey);
-                
-                // Only alert if not already alerted within 24h
-                if (!alertedAt || alertedAt === 0) {
-                    await this.notifier.send(signal);
-                    this.processedSignals.set(signalKey, Date.now());
-                    this.notificationCount++;
-                }
-            }
-            
-            this.cycleMetrics.decisions[verdict] = (this.cycleMetrics.decisions[verdict] || 0) + 1;
-            return signal;
+            console.log(`[ARBITRAGE] Cycle complete. Alerts sent: ${alertsSent}`);
         } catch (error) {
-            const isTransient = error.message.includes('TRANSIENT') || 
-                                error.message.includes('TIMEOUT') || 
-                                error.message.includes('Target closed') ||
-                                error.message.includes('Navigation');
-            
-            if (isTransient) {
-                this.cycleMetrics.transientErrors++;
-            } else {
-                this.cycleMetrics.criticalErrors++;
-                await this.logger.logError(error, 'PIPELINE_FLOW');
-            }
-            this.cycleMetrics.decisions['SKIP']++;
-            return null;
-        }
-    }
-
-    validateProductQuality(product) {
-        const title = product.title.toLowerCase();
-        
-        // 1. DYNAMIC BLOCKLIST (Phase 44/45/45.2)
-        const configBlocklist = (this.config.EliteNegativeKeywords || []).map(k => k.toLowerCase());
-        const hardBlocklist = ['bag', 'handbag', 'tote', 'clutch', 'belt bag', 'purse', 'dress', 'skirt', 'blouse', 'belt', 'wallet', 'sock', 'basic tee', 'underwear', 'engineered garments', 'studio nicholson'];
-        const fullBlocklist = [...new Set([...configBlocklist, ...hardBlocklist])];
-        
-        const isBlocked = fullBlocklist.some(term => title.includes(term));
-        if (isBlocked) {
-            console.log(`[FILTER] Skipped Category/Designer (Blocklist): ${product.title}`);
-            return false;
-        }
-
-        // 2. DYNAMIC LIQUIDITY WHITELIST (Phase 45/45.2)
-        const tiers = this.config.EliteKeywordTiers || {};
-        const tier1 = (tiers.Tier1_HighPriority?.keywords || []).map(k => k.toLowerCase());
-        const tier2 = (tiers.Tier2_Conditional?.keywords || []).map(k => k.toLowerCase());
-        const tier3 = (tiers.Tier3_Speculative?.keywords || []).map(k => k.toLowerCase());
-        
-        const isTier1 = tier1.some(b => title.includes(b));
-        const isTier2 = tier2.some(b => title.includes(b));
-        const isTier3 = tier3.some(b => title.includes(b));
-
-        if (!isTier1 && !isTier2 && !isTier3) {
-            console.log(`[FILTER] Skipped Brand (Low Liquidity): ${product.title}`);
-            return false;
-        }
-
-        // 3. CATEGORY WHITELIST (Phase 44)
-        const whitelist = ['sneaker', 'shoe', 'nike', 'jordan', 'yeezy', 'jacket', 'hoodie', 'outerwear', 'coat', 'bearbrick', 'pop mart', 'pokemon', 'trading card'];
-        const isWhitelisted = whitelist.some(term => title.includes(term));
-        
-        if (!isWhitelisted) {
-             console.log(`[FILTER] Skipped Category Miss: ${product.title}`);
-             return false;
-        }
-
-        return true;
-    }
-
-    calculateLiquidityScore(product) {
-        const title = product.title.toLowerCase();
-        const tiers = this.config.EliteKeywordTiers || {};
-        
-        const tier1 = (tiers.Tier1_HighPriority?.keywords || []).map(k => k.toLowerCase());
-        const tier2 = (tiers.Tier2_Conditional?.keywords || []).map(k => k.toLowerCase());
-        const tier3 = (tiers.Tier3_Speculative?.keywords || []).map(k => k.toLowerCase());
-
-        if (tier1.some(b => title.includes(b))) return 95;
-        if (tier3.some(b => title.includes(b))) return 85; 
-        if (tier2.some(b => title.includes(b))) return 80;
-        
-        return 50; 
-    }
-
-    /**
-     * Phase 48: Load Trade History for Restock Detection.
-     */
-    loadTradeHistory() {
-        try {
-            const tradesPath = path.join(__dirname, '../data/trades.json');
-            if (fs.existsSync(tradesPath)) {
-                const data = JSON.parse(fs.readFileSync(tradesPath, 'utf8'));
-                return data.history || {};
-            }
-        } catch (e) {
-            console.error('[ORCHESTRATOR] Failed to load trade history');
-        }
-        return {};
-    }
-
-    /**
-     * Phase 48: Check for Restock.
-     */
-    checkRestock(product) {
-        if (!product || (!product.id && !product.url)) return false;
-        const key = product.url || product.link;
-        const existing = this.tradeHistory[key];
-        
-        if (!existing) return false;
-        
-        // Match status based on trades.json schema: "Sold Out" vs "Available"
-        if (existing.status === 'Sold Out' && product.available === true) {
-            console.log(`[RESTOCK DETECTED] ${product.title}`);
-            return true;
-        }
-        return false;
-    }
-
-    async runCycle() {
-        this.resetMetrics();
-        await this.sendHeartbeat('START');
-        
-        // Phase 27: Zero-Persistent Browser Lifecycle
-        const puppeteer = require('puppeteer-extra');
-        const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-        
-        // Phase 33: Disable User-Agent Override (Source of crashes)
-        const stealth = StealthPlugin();
-        stealth.enabledEvasions.delete('user-agent-override');
-        puppeteer.use(stealth);
-
-        const browser = await puppeteer.launch({ 
-            headless: "new", 
-            args: [
-                '--no-sandbox', 
-                '--disable-setuid-sandbox', 
-                '--disable-dev-shm-usage', 
-                '--disable-gpu',
-                '--no-first-run',
-                '--no-zygote'
-                // --single-process removed for Hetzner 8GB stability
-            ] 
-        });
-
-        this.isShuttingDown = false;
-
-        // Phase 34: Relaxed 300s (5m) Global Cycle Timeout for Hetzner
-        const cycleTimeout = setTimeout(async () => {
-            console.error('[WATCHDOG] Cycle timed out! Reclaiming resources.');
-            this.isShuttingDown = true;
-            await sleep(500); // Larger buffer for agents
-            await browser.close().catch(() => {});
-        }, 300000);
-
-        try {
-            const allTargets = this.config.TargetURLs;
-            const start = this.batchPointer * this.batchSize;
-            const batch = allTargets.slice(start, start + this.batchSize);
-            
-            // Advance pointer for next cycle
-            this.batchPointer = (start + this.batchSize >= allTargets.length) ? 0 : this.batchPointer + 1;
-
-            let allProducts = [];
-            let alertQueue = [];
-            for (const target of batch) {
-                // Phase 30: Site-level Failure Penalty (Skip if 2+ consecutive failures)
-                const failures = this.siteFailures.get(target.site) || 0;
-                if (failures >= 2) {
-                    console.log(`[ORCHESTRATOR] Skipping ${target.site} due to persistent failures.`);
-                    continue;
-                }
-
-                try {
-                    // Phase 27: Strict Sequential & Lightweight
-                    if (target.url.includes('products.json')) {
-                        const products = await this.scout.scanShopify(target, 'Mozilla/5.0...');
-                        allProducts = allProducts.concat(products);
-                        this.siteFailures.set(target.site, 0); // Reset on success
-                    } else {
-                        const page = await browser.newPage();
-                        try {
-                            // Phase 33: Manual User Agent (Avoid stealth override crash)
-                            await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36');
-                            
-                            // Lightweight Mode: Block heavy resources
-                            await page.setRequestInterception(true);
-                            page.on('request', (req) => {
-                                if (['image', 'font', 'media'].includes(req.resourceType())) req.abort();
-                                else req.continue();
-                            });
-
-                            page.setDefaultNavigationTimeout(15000); // Phase 30: 15s page load
-                            
-                            if (this.isShuttingDown) throw new Error('SHUTDOWN_IN_PROGRESS');
-                            const products = await this.scout.scanBrowser(target, page);
-                            allProducts = allProducts.concat(products);
-                            this.siteFailures.set(target.site, 0); // Reset on success
-                        } catch (e) {
-                            if (e.message.includes('Target closed') || this.isShuttingDown) {
-                                console.log(`[ORCHESTRATOR] Site ${target.site} skipped during shutdown.`);
-                            } else {
-                                throw e;
-                            }
-                        } finally {
-                            if (!page.isClosed()) await page.close().catch(() => {});
-                        }
-                    }
-                } catch (e) {
-                    this.cycleMetrics.transientErrors++;
-                    this.siteFailures.set(target.site, (this.siteFailures.get(target.site) || 0) + 1);
-                    console.warn(`[ORCHESTRATOR] Site ${target.site} failure count: ${this.siteFailures.get(target.site)}`);
-                }
-            }
-
-            // Phase 40: Pipeline Defensive Guard
-            const totalCollected = (allProducts || []).length;
-            console.log(`[PIPELINE DEBUG] Total Products Collected: ${totalCollected}`);
-            this.cycleMetrics.signalsFound = totalCollected;
-
-            if (totalCollected === 0) {
-                console.log('[PIPELINE] No products collected this cycle. (Graceful Continue)');
-            }
-
-            // Phase 48: Demand Proxy (First Pass - Keyword Frequency)
-            for (const p of (allProducts || [])) {
-                if (!p.title) continue;
-                const terms = p.title.toLowerCase().split(' ');
-                terms.forEach(t => {
-                    if (t.length > 3) this.cycleMetrics.keywordTracker[t] = (this.cycleMetrics.keywordTracker[t] || 0) + 1;
-                });
-            }
-
-            // Sequential processing to avoid CPU spikes
-            for (const product of (allProducts || [])) {
-                if (product.available) {
-                    const title = product.title.toLowerCase();
-
-                    // Phase 48: Early Hard Filter (CPU Saver)
-                    const tiers = this.config.EliteKeywordTiers || {};
-                    const matchedTier = Object.entries(tiers).find(([tier, data]) => 
-                        data.keywords.some(k => title.includes(k.toLowerCase()))
-                    )?.[0];
-
-                    if (!matchedTier) {
-                        this.cycleMetrics.rejections.tier++;
-                        continue; // brand not in ANY tier
-                    }
-
-                    // Phase 44/48: Quality Filter (Blocklist)
-                    if (!this.validateProductQuality(product)) {
-                        this.cycleMetrics.rejections.blocklist++;
-                        continue;
-                    }
-
-                    // Phase 48: Restock Detection (Defensive Guard)
-                    const isRestock = typeof this.checkRestock === "function" 
-                        ? this.checkRestock(product) 
-                        : false;
-
-                    // Phase 48: Conditional Tier Execution
-                    if (!isRestock) {
-                        if (matchedTier === 'Tier2_Conditional') {
-                            const isNew = title.includes('new') || title.includes('drop') || title.includes('release');
-                            const publishedAt = product.published_at ? new Date(product.published_at) : null;
-                            const hoursSinceDrop = publishedAt ? (Date.now() - publishedAt) / (1000 * 60 * 60) : 999;
-                            
-                            if (!isNew && hoursSinceDrop > 24) {
-                                this.cycleMetrics.rejections.tier++;
-                                continue; // Tier 2 must be new or contain keywords
-                            }
-                        }
-
-                        if (matchedTier === 'Tier3_Speculative') {
-                            // Handled inside processProduct: hard skip if no resale data
-                        }
-                    }
-
-                    // Phase 45: Liquidity Engine Gate
-                    const liquidityScore = this.calculateLiquidityScore(product);
-                    if (liquidityScore < 70) {
-                        this.cycleMetrics.rejections.tier++;
-                        continue;
-                    }
-
-                    const signal = await this.processProduct(product, browser);
-                    
-                    // Phase 48: Stability Hotfix (Null Guard)
-                    if (!signal || !signal.intelligence) {
-                        this.metrics.errors.transient++;
-                        continue;
-                    }
-
-                    if (isRestock) {
-                        signal.intelligence.score += 20;
-                        signal.intelligence.tags = [...(signal.intelligence.tags || []), 'RESTOCK'];
-                    }                    
-                    // Phase 48: Demand Proxy Boost
-                    const demandMatches = Object.entries(this.cycleMetrics.keywordTracker).some(([k, count]) => title.includes(k) && count >= 3);
-                    if (demandMatches) {
-                        signal.intelligence.score += 10;
-                        signal.intelligence.demandBoost = true;
-                    }
-
-                    // Phase 46: Early Signal Limit (Max 2 per cycle)
-                    const isEarlyVerdict = signal?.execution?.verdict === 'EARLY BUY';
-                    if (isEarlyVerdict) {
-                        this.cycleMetrics.earlySignalsInCycle = (this.cycleMetrics.earlySignalsInCycle || 0) + 1;
-                        if (this.cycleMetrics.earlySignalsInCycle > 2) {
-                            continue;
-                        }
-                    }
-
-                    if (signal && ['STRONG BUY', 'BUY SMALL', 'WATCH', 'EARLY WATCH', 'EARLY BUY'].includes(signal.execution?.verdict)) {
-                        signal.intelligence.liquidityScore = liquidityScore;
-                        alertQueue.push(signal);
-                    } else if (signal) {
-                        this.cycleMetrics.rejections.profit++;
-                    }
-                }
-            }
-
-            // Phase 41: Alert Pipeline Defensive Guard
-            const alertCount = (alertQueue || []).length;
-            console.log(`[ALERT DEBUG] Total Alerts Prepared: ${alertCount}`);
-
-            if (alertCount === 0) {
-                console.log('[ALERT PIPELINE] No actionable signals. Checking for fallback WATCH alerts...');
-                // Phase 48: Fallback Guarantee (Top 3 WATCH >= 50)
-                const fallbackWatches = (alertQueue || [])
-                    .filter(s => s.intelligence.score >= 50)
-                    .sort((a,b) => b.intelligence.score - a.intelligence.score)
-                    .slice(0, 3);
-                
-                if (fallbackWatches.length > 0) {
-                    for (const signal of fallbackWatches) {
-                        try {
-                            await this.notifier.send(signal);
-                            this.notificationCount++;
-                        } catch (e) {
-                            console.error(`[NOTIFICATION FAIL] ${e.message}`);
-                        }
-                    }
-                } else {
-                    console.log('[ALERT PIPELINE] No valid signals found (even fallbacks).');
-                }
-            } else {
-                // Phase 39/42/45: Prioritized Alert Output (Liquidity-First)
-                const safeQueue = Array.isArray(alertQueue) ? alertQueue : [];
-                
-                // Sort by Liquidity Score DESC, then Profit DESC
-                const sortedQueue = safeQueue.sort((a, b) => {
-                    const liqDiff = (b.intelligence.liquidityScore || 0) - (a.intelligence.liquidityScore || 0);
-                    if (liqDiff !== 0) return liqDiff;
-                    return (b.risk?.worstCaseProfit || 0) - (a.risk?.worstCaseProfit || 0);
-                });
-
-                const strongBuys = sortedQueue.filter(s => s.execution.verdict === 'STRONG BUY');
-                const earlyBuys = sortedQueue.filter(s => s.execution.verdict === 'EARLY BUY');
-                const buySmalls = sortedQueue.filter(s => s.execution.verdict === 'BUY SMALL');
-                const earlyWatches = sortedQueue.filter(s => s.execution.verdict === 'EARLY WATCH');
-                const watches = sortedQueue.filter(s => s.execution.verdict === 'WATCH');
-
-                // Phase 42/46/48: Select prioritized signals (Max 10 total)
-                const activeAlerts = [
-                    ...strongBuys.slice(0, 2),
-                    ...earlyBuys.slice(0, 2),
-                    ...buySmalls.slice(0, 4),
-                    ...earlyWatches.slice(0, 2),
-                    ...watches.slice(0, 10 - Math.min(10, strongBuys.slice(0,2).length + earlyBuys.slice(0,2).length + buySmalls.slice(0,4).length + earlyWatches.slice(0,2).length))
-                ].slice(0, 10);
-                
-                for (const signal of activeAlerts) {
-                    const signalKey = `${signal.product.title}-${signal.product.price}`;
-                    const alertedAt = this.processedSignals.get(signalKey);
-                    
-                    if (!alertedAt || alertedAt === 0) {
-                        try {
-                            await this.notifier.send(signal);
-                            this.processedSignals.set(signalKey, Date.now());
-                            this.notificationCount++;
-                        } catch (e) {
-                            console.error(`[NOTIFICATION FAIL] ${e.message}`);
-                        }
-                    }
-                }
-            }
-
-            // Phase 42: Refined Top 5 Actionable (No neutral junk)
-            this.cycleMetrics.topActionable = alertQueue
-                .filter(s => s.execution.verdict !== 'WATCH' || s.risk?.worstCaseProfit >= 0)
-                .sort((a, b) => (b.risk?.worstCaseProfit || 0) - (a.risk?.worstCaseProfit || 0))
-                .slice(0, 5);
-
-            // Phase 28: Adaptive Feedback Loop Logic
-            const totalBuys = (this.cycleMetrics.decisions['STRONG BUY'] || 0) + (this.cycleMetrics.decisions['BUY SMALL'] || 0);
-            
-            if (totalBuys === 0) {
-                this.emptyCycleCount++;
-                if (this.emptyCycleCount >= 3 && !this.softModeActive) {
-                    console.log('🔄 [ADAPTIVE] 3 empty cycles detected. Entering SOFT MODE for 2 cycles.');
-                    this.softModeActive = true;
-                }
-            } else {
-                this.emptyCycleCount = 0;
-                this.softModeActive = false;
-            }
-
+            console.error(`[ARBITRAGE CRITICAL] Cycle crashed: ${error.message}`);
         } finally {
-            clearTimeout(cycleTimeout);
-            await browser.close().catch(() => {});
-            await this.sendHeartbeat('END');
+            // Cleanup memory (24h)
+            const now = Date.now();
+            for (const [key, timestamp] of this.processedSignals.entries()) {
+                if (now - timestamp > 86400000) this.processedSignals.delete(key);
+            }
         }
     }
 }

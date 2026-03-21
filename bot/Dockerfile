@@ -1,8 +1,13 @@
-FROM ghcr.io/puppeteer/puppeteer:latest
-USER root
+FROM mcr.microsoft.com/playwright:v1.42.0-jammy
+
 WORKDIR /app
+
 COPY package*.json ./
 RUN npm install
+
 COPY . .
-RUN mkdir -p data logs && chmod 777 data logs
+
+# Ensure browsers are installed
+RUN npx playwright install chromium
+
 CMD ["node", "index.js"]
